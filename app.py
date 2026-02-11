@@ -47,6 +47,12 @@ def _order_amount(product: str) -> int:
     return PRICE_PROFILE_ONLY
 
 
+@app.route("/health")
+def health():
+    """Render のヘルスチェック用。起動確認だけしてすぐ 200 を返す。"""
+    return "", 200
+
+
 @app.route("/")
 def index():
     t3 = PRICE_PROFILE_ONLY + PRICE_RELATIONSHIP_3
