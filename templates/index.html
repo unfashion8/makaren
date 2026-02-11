@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>マカレン数秘術 — プロファイル作成</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Noto+Sans+JP:wght@300;400;500;600&family=Noto+Serif+JP:wght@200;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      /* Makaren Noir Gold theme */
+      --bg: #070708;
+      --surface: #0e1013;
+      --surface-hover: #13161c;
+      --border: rgba(255, 255, 255, 0.08);
+      --border-strong: rgba(201, 162, 74, 0.45);
+      --text: rgba(255, 255, 255, 0.92);
+      --text-soft: rgba(255, 255, 255, 0.62);
+      --muted: rgba(255, 255, 255, 0.38);
+      --gold: #c9a24a;
+      --gold-soft: rgba(201, 162, 74, 0.18);
+      --shadow-soft: 0 18px 45px rgba(0, 0, 0, 0.7);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(circle at top, #111217 0, #070708 55%, #050506 100%);
+      color: var(--text);
+      font-family: "Noto Sans JP", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      font-weight: 400;
+      line-height: 1.7;
+    }
+    /* Hero Section — Makaren Noir Gold */
+    .hero {
+      background:
+        radial-gradient(circle at top, rgba(201, 162, 74, 0.14), transparent 55%),
+        linear-gradient(180deg, #050506 0%, #070708 40%, #050506 100%);
+      color: var(--text);
+      font-family: "Noto Serif JP", "Hiragino Mincho ProN", serif;
+      padding: clamp(4rem, 12vw, 7rem) 1.5rem clamp(2.5rem, 7vw, 4.5rem);
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero .hero-title {
+      display: block;
+      font-size: clamp(2.25rem, 7vw, 3.6rem);
+      font-weight: 600;
+      letter-spacing: 0.16em;
+      line-height: 1.4;
+      margin: 0 0 1.2em;
+    }
+    .hero .hero-line {
+      display: block;
+      font-size: clamp(1.1rem, 3.2vw, 1.45rem);
+      font-weight: 400;
+      letter-spacing: 0.08em;
+      line-height: 1.9;
+      margin: 0;
+    }
+    .hero .hero-line:first-of-type {
+      font-weight: 200;
+      letter-spacing: 0.1em;
+    }
+    .hero .hero-line:last-child {
+      font-size: clamp(1rem, 2.8vw, 1.25rem);
+      letter-spacing: 0.06em;
+      margin-top: 0.4em;
+      opacity: 0.9;
+    }
+    .hero::after {
+      /* gold hairline accent */
+      content: "";
+      display: block;
+      width: 140px;
+      height: 1px;
+      margin: clamp(2rem, 5vw, 2.75rem) auto 0;
+      background-image: linear-gradient(
+        90deg,
+        transparent,
+        rgba(201, 162, 74, 0.8),
+        transparent
+      );
+      opacity: 0.9;
+    }
+    .wrap {
+      max-width: 780px;
+      margin: 0 auto;
+      padding: 2.5rem 1.5rem 4rem;
+    }
+    h1 {
+      font-family: "Cormorant Garamond", serif;
+      font-size: clamp(1.75rem, 4vw, 2.25rem);
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      margin: 0 0 0.35em;
+      color: var(--text);
+    }
+    .sub {
+      font-size: 0.9rem;
+      color: var(--muted);
+      margin-bottom: 2rem;
+    }
+    .cards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    @media (max-width: 520px) { .cards { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.25rem 1.6rem;
+      cursor: pointer;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.65);
+      transition: border-color 0.28s ease, box-shadow 0.28s ease, background 0.28s ease,
+        transform 0.18s ease;
+    }
+    .card:hover {
+      border-color: var(--gold-soft);
+      background: var(--surface-hover);
+      box-shadow: 0 22px 55px rgba(0, 0, 0, 0.75);
+      transform: translateY(-1px);
+    }
+    .card.selected {
+      border-color: var(--gold);
+      box-shadow: 0 0 0 1px var(--gold-soft), 0 22px 55px rgba(0, 0, 0, 0.8);
+    }
+    .card h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin: 0 0 0.35em;
+      color: var(--text);
+    }
+    .card .price {
+      font-family: "Cormorant Garamond", serif;
+      font-size: 1.5rem;
+      color: var(--gold);
+      margin-bottom: 0.25em;
+    }
+    .card .desc {
+      font-size: 0.85rem;
+      color: var(--text-soft);
+    }
+    .form-block {
+      margin-bottom: 1.5rem;
+    }
+    .form-block label {
+      display: block;
+      font-size: 0.85rem;
+      color: var(--text-soft);
+      margin-bottom: 0.4em;
+    }
+    .form-block input,
+    .form-block textarea {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      background: #0b0d11;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 1rem;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    }
+    .form-block input::placeholder,
+    .form-block textarea::placeholder {
+      color: var(--muted);
+    }
+    .form-block input:focus,
+    .form-block textarea:focus {
+      outline: none;
+      border-color: var(--gold);
+      box-shadow: 0 0 0 1px var(--gold-soft), 0 0 0 4px rgba(201, 162, 74, 0.08);
+    }
+    .form-block textarea {
+      min-height: 100px;
+      resize: vertical;
+    }
+    .form-hint {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 0.35em;
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    @media (max-width: 520px) { .form-row { grid-template-columns: 1fr; } }
+    .numbers-preview {
+      margin: 1.5rem 0;
+      padding: 1rem 1.25rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+    .numbers-preview h3 {
+      font-size: 0.9rem;
+      color: var(--muted);
+      margin: 0 0 0.75rem;
+    }
+    .numbers-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 0.5rem 1rem;
+    }
+    .numbers-grid span {
+      font-size: 0.9rem;
+      color: var(--text);
+    }
+    .numbers-grid span strong {
+      color: var(--accent);
+      margin-right: 0.35em;
+    }
+    .relationship-section {
+      margin-top: 2rem;
+      padding-top: 2rem;
+      border-top: 1px solid var(--border);
+    }
+    .relationship-section h3 {
+      font-size: 1rem;
+      margin: 0 0 1rem;
+      color: var(--muted);
+    }
+    .person-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+      align-items: end;
+    }
+    @media (max-width: 600px) {
+      .person-row { grid-template-columns: 1fr; }
+    }
+    .person-row label { font-size: 0.8rem; }
+    .person-row input {
+      padding: 0.5rem 0.75rem;
+      background: #0b0d11;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 0.95rem;
+    }
+    .btn {
+      display: inline-block;
+      padding: 0.9rem 1.9rem;
+      background: var(--gold);
+      color: #111111;
+      border: none;
+      border-radius: 999px;
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      cursor: pointer;
+      transition: background 0.25s ease, transform 0.12s ease, box-shadow 0.25s ease;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+    }
+    .btn:hover {
+      background: #d3b35a;
+      transform: translateY(-1px);
+      box-shadow: 0 14px 40px rgba(0, 0, 0, 0.85);
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+    .btn.secondary {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--gold-soft);
+      border-radius: 999px;
+      box-shadow: none;
+    }
+    .btn.secondary:hover {
+      background: rgba(201, 162, 74, 0.08);
+      box-shadow: none;
+    }
+    .actions {
+      margin-top: 2rem;
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: center;
+    }
+    .result-area {
+      margin-top: 2.5rem;
+      padding: 1.5rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      white-space: pre-wrap;
+      font-size: 0.95rem;
+      line-height: 1.75;
+      max-height: 70vh;
+      overflow-y: auto;
+    }
+    .result-area h2 {
+      font-size: 1.1rem;
+      margin: 1em 0 0.5em;
+      color: var(--accent);
+    }
+    .result-area h2:first-child { margin-top: 0; }
+    .status {
+      margin-top: 1rem;
+      padding: 0.75rem;
+      border-radius: 8px;
+      font-size: 0.9rem;
+    }
+    .status.loading { background: var(--surface); border: 1px solid var(--border); color: var(--muted); }
+    .status.error { background: rgba(180, 60, 60, 0.2); border: 1px solid #a44; color: #e88; }
+    .status.success { background: rgba(60, 120, 80, 0.15); border: 1px solid #4a6; color: #8c8; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <span class="hero-title">マカレン数秘術</span>
+    <p class="hero-line">知らなかった自分に、出会う。</p>
+    <p class="hero-line">数字は偶然ではない。</p>
+    <p class="hero-line">あなたという存在の設計図である。</p>
+  </header>
+
+  <div class="wrap">
+    <div class="cards">
+      <div class="card selected" data-product="profile_only">
+        <h3>自分の占いプロファイル</h3>
+        <div class="price">¥{{ price_profile_display }}</div>
+        <p class="desc">核となる自己・パターン・運用ガイダンスまで</p>
+      </div>
+      <div class="card" data-product="relationship_3">
+        <h3>プロファイル ＋ 関係性（3名まで）</h3>
+        <div class="price">¥{{ total_r3_display }}</div>
+        <p class="desc">上記 ＋ 3名まで 3,000円</p>
+      </div>
+      <div class="card" data-product="relationship_5">
+        <h3>プロファイル ＋ 関係性（5名まで）</h3>
+        <div class="price">¥{{ total_r5_display }}</div>
+        <p class="desc">上記 ＋ 5名まで 4,000円</p>
+      </div>
+      <div class="card" data-product="relationship_10">
+        <h3>プロファイル ＋ 関係性（10名まで）</h3>
+        <div class="price">¥{{ total_r10_display }}</div>
+        <p class="desc">上記 ＋ 10名まで 6,000円</p>
+      </div>
+    </div>
+
+    <form id="form">
+      <div class="form-row">
+        <div class="form-block">
+          <label for="last_name">姓（ローマ字・必須 / 全角半角どちらも可）</label>
+          <input
+            type="text"
+            id="last_name"
+            name="last_name"
+            required
+            placeholder="Yamada"
+            autocomplete="off"
+            lang="en"
+            inputmode="text"
+          />
+        </div>
+        <div class="form-block">
+          <label for="first_name">名（ローマ字・必須 / 全角半角どちらも可）</label>
+          <input
+            type="text"
+            id="first_name"
+            name="first_name"
+            required
+            placeholder="Taro"
+            autocomplete="off"
+            lang="en"
+            inputmode="text"
+          />
+        </div>
+      </div>
+      <p class="form-hint" style="margin: -0.5rem 0 1.5rem;">
+        ※ 姓名のローマ字表記については、
+        <a
+          href="/name-guide"
+          onclick="window.open('/name-guide', '_blank'); return false;"
+          style="color: var(--gold); text-decoration: underline;"
+        >名前をローマ字にする方法</a>
+        をご確認ください。
+      </p>
+      <div class="form-block">
+        <label for="maiden_last_name">旧姓（ローマ字・任意）</label>
+        <input
+          type="text"
+          id="maiden_last_name"
+          name="maiden_last_name"
+          placeholder="結婚前の姓があれば入力"
+          autocomplete="off"
+          lang="en"
+          inputmode="text"
+        />
+        <small class="form-hint">結婚などで姓が変わった場合、生まれたときの姓を入力すると、旧姓と現在の姓の意味・バランスの考察をプロファイルに含めます。</small>
+      </div>
+      <div class="form-block">
+        <label for="birth_date">生年月日（必須・YYYY/MM/DD形式で入力）</label>
+        <input
+          type="text"
+          id="birth_date"
+          name="birth_date"
+          required
+          placeholder="1990/01/23"
+          inputmode="numeric"
+        />
+      </div>
+      <div class="form-block">
+        <label for="consultation">相談内容・背景（任意）</label>
+        <textarea id="consultation" name="consultation" placeholder="今の悩みや、プロファイルに含めてほしいテーマがあれば記入してください"></textarea>
+      </div>
+      <div class="form-block">
+        <label for="email">メールアドレス（送付先）</label>
+        <input type="email" id="email" name="email" placeholder="example@mail.com" autocomplete="email" />
+        <small class="form-hint">鑑定結果をメールでお送りします。メールアドレスが間違っていると結果が届きませんので、入力内容をよくご確認ください。</small>
+      </div>
+      <div class="form-block">
+        <label for="referral_code">紹介コード（任意）</label>
+        <input type="text" id="referral_code" name="referral_code" placeholder="7桁の紹介コード" autocomplete="off" maxlength="7" pattern="[0-9]*" inputmode="numeric" />
+        <small class="form-hint">紹介コードを入力すると、鑑定が10%OFFになります。</small>
+      </div>
+
+      <div id="relationshipSection" class="relationship-section hidden">
+        <h3 id="relationshipSectionTitle">周囲の人物 — 姓・名（ローマ字）と生年月日</h3>
+        <div id="personRows"></div>
+      </div>
+
+      <div class="actions">
+        <button type="submit" class="btn" id="submitBtn">鑑定する</button>
+      </div>
+    </form>
+
+    <div id="status" class="status hidden"></div>
+    <div id="resultArea" class="result-area hidden"></div>
+    <div class="referral-issued status success hidden" style="margin-top:0.5rem;">
+      あなたの紹介コード: <strong id="issuedReferralCode"></strong> — お友達に共有すると、その方が10%OFFで鑑定を受けられます。
+    </div>
+    <div id="mailSentNotice" class="status success hidden">メールを送信しました。</div>
+  </div>
+
+  <script>
+    const form = document.getElementById("form");
+    const productCards = document.querySelectorAll(".card[data-product]");
+    const relationshipSection = document.getElementById("relationshipSection");
+    const personRows = document.getElementById("personRows");
+    const submitBtn = document.getElementById("submitBtn");
+    const statusEl = document.getElementById("status");
+    const resultArea = document.getElementById("resultArea");
+    const birthInput = document.getElementById("birth_date");
+    const mailSentNotice = document.getElementById("mailSentNotice");
+
+    let lastResult = { profile: "", relationship: null, name: "" };
+
+    function normalizeText(value) {
+      return (value || "").normalize("NFKC").replace(/\u3000/g, " ").trim();
+    }
+
+    function normalizeName(value) {
+      return normalizeText(value).replace(/\s+/g, " ").toUpperCase();
+    }
+
+    function normalizeBirthDate(value) {
+      return normalizeText(value).replace(/[.\-]/g, "/");
+    }
+
+    function formatBirthDateFromDigits(value) {
+      const v = value.replace(/\D/g, "").slice(0, 8); // 数字のみ・最大8桁
+      if (!v) return "";
+      if (v.length <= 4) return v;
+      if (v.length <= 6) return v.slice(0, 4) + "/" + v.slice(4);
+      return v.slice(0, 4) + "/" + v.slice(4, 6) + "/" + v.slice(6);
+    }
+
+    // 生年月日入力用: YYYY-MM-DD を返す（8桁 or YYYY/MM/DD or YYYY-MM-DD から）
+    function toDateInputValue(value) {
+      const raw = (value || "").replace(/\D/g, "").slice(0, 8);
+      if (raw.length !== 8) return "";
+      const y = raw.slice(0, 4), m = raw.slice(4, 6), d = raw.slice(6, 8);
+      const mn = Number(m), dn = Number(d);
+      if (mn < 1 || mn > 12 || dn < 1 || dn > 31) return "";
+      return y + "-" + m + "-" + d;
+    }
+
+    // 本人の生年月日: カレンダー選択 or テキスト入力（8桁・YYYY/MM/DD・YYYY-MM-DD）の両方に対応
+    if (birthInput) {
+      birthInput.addEventListener("input", (e) => {
+        const v = e.target.value;
+        const digits = v.replace(/\D/g, "");
+        if (digits.length >= 8) {
+          const asDate = toDateInputValue(digits.slice(0, 8));
+          if (asDate) e.target.value = asDate;
+        }
+      });
+      birthInput.addEventListener("blur", (e) => {
+        const v = e.target.value;
+        const normalized = normalizeBirthDate(v);
+        const asDate = toDateInputValue(normalized);
+        if (asDate) e.target.value = asDate;
+      });
+    }
+
+    function parseBirth(birth) {
+      const normalized = normalizeBirthDate(birth);
+      const m = normalized.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
+      if (!m) return null;
+      const y = Number(m[1]);
+      const mo = Number(m[2]);
+      const d = Number(m[3]);
+      const dt = new Date(y, mo - 1, d);
+      if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+      if (y < 1900 || y > 2100) return null;
+      return { y, mo, d };
+    }
+
+    const MAX_PERSONS = 10;
+    const titleEl = document.getElementById("relationshipSectionTitle");
+    function updateRelationshipSection(product) {
+      const isRel = product === "relationship_3" || product === "relationship_5" || product === "relationship_10";
+      relationshipSection.classList.toggle("hidden", !isRel);
+      const max = product === "relationship_3" ? 3 : product === "relationship_5" ? 5 : 10;
+      if (titleEl) titleEl.textContent = "周囲の人物（最大" + max + "人）— 姓・名（ローマ字）と生年月日";
+      document.querySelectorAll(".person-row").forEach((row, i) => {
+        row.style.display = i < max ? "" : "none";
+      });
+    }
+    productCards.forEach((card) => {
+      card.addEventListener("click", () => {
+        productCards.forEach((c) => c.classList.remove("selected"));
+        card.classList.add("selected");
+        updateRelationshipSection(card.dataset.product);
+      });
+    });
+
+    for (let i = 0; i < MAX_PERSONS; i++) {
+      const row = document.createElement("div");
+      row.className = "person-row";
+      row.innerHTML = `
+        <div>
+          <label>姓（ローマ字）</label>
+          <input
+            type="text"
+            name="other_last_${i}"
+            placeholder="例: Tanaka"
+            data-other-last
+            autocomplete="off"
+            lang="en"
+            inputmode="text"
+          />
+        </div>
+        <div>
+          <label>名（ローマ字）</label>
+          <input
+            type="text"
+            name="other_first_${i}"
+            placeholder="例: Hanako"
+            data-other-first
+            autocomplete="off"
+            lang="en"
+            inputmode="text"
+          />
+        </div>
+        <div>
+          <label>生年月日</label>
+          <input
+            type="text"
+            name="other_birth_${i}"
+            placeholder="1990/01/23"
+            data-other-birth
+            inputmode="numeric"
+          />
+        </div>
+      `;
+      personRows.appendChild(row);
+    }
+
+    // 周囲の人物の生年月日も、8桁の数字入力から自動整形できるようにする
+    const attachOtherBirthHandlers = () => {
+      document.querySelectorAll("[data-other-birth]").forEach((el) => {
+        el.addEventListener("input", (e) => {
+          const v = e.target.value;
+          const digits = v.replace(/\D/g, "");
+          if (digits.length >= 8) {
+            const asDate = toDateInputValue(digits.slice(0, 8));
+            if (asDate) e.target.value = asDate;
+          }
+        });
+        el.addEventListener("blur", (e) => {
+          const v = e.target.value;
+          const normalized = normalizeBirthDate(v);
+          const asDate = toDateInputValue(normalized);
+          if (asDate) e.target.value = asDate;
+        });
+      });
+    };
+
+    attachOtherBirthHandlers();
+    updateRelationshipSection("profile_only");
+
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const product = document.querySelector(".card.selected").dataset.product;
+      let last_name = normalizeName(document.getElementById("last_name").value);
+      let first_name = normalizeName(document.getElementById("first_name").value);
+      // 万一「KIMURA KENJI」のように姓欄にフルネームが入っていた場合は自動で分割
+      if (!first_name && last_name.includes(" ")) {
+        const parts = last_name.split(/\s+/);
+        last_name = parts[0];
+        first_name = parts.slice(1).join(" ");
+      }
+      document.getElementById("last_name").value = last_name;
+      document.getElementById("first_name").value = first_name;
+
+      // ローマ字以外が含まれていないかチェック（A〜Z・スペース・ハイフン・アポストロフィのみ許可）
+      const namePattern = /^[A-Z\s'-]+$/;
+      if (!namePattern.test(last_name) || !namePattern.test(first_name)) {
+        statusEl.textContent = "姓・名はローマ字（A〜Z）で入力してください。";
+        statusEl.className = "status error";
+        statusEl.classList.remove("hidden");
+        return;
+      }
+
+      const birth_date_raw = document.getElementById("birth_date").value;
+      const birth_date = normalizeBirthDate(birth_date_raw) || birth_date_raw;
+      document.getElementById("birth_date").value = toDateInputValue(birth_date) || birth_date_raw;
+
+      const maiden_last_name = normalizeName(document.getElementById("maiden_last_name").value);
+      if (document.getElementById("maiden_last_name").value) document.getElementById("maiden_last_name").value = maiden_last_name;
+      const consultation = normalizeText(document.getElementById("consultation").value);
+      document.getElementById("consultation").value = consultation;
+      const email = normalizeText(document.getElementById("email").value).toLowerCase();
+      document.getElementById("email").value = email;
+      const nameDisplay = `${last_name} ${first_name}`;
+
+      const parsedBirth = parseBirth(birth_date || "");
+      if (!parsedBirth) {
+        statusEl.textContent = "生年月日は YYYY/MM/DD 形式で、存在する日付を入力してください（例: 1990/01/23）。";
+        statusEl.className = "status error";
+        statusEl.classList.remove("hidden");
+        return;
+      }
+      if (!email) {
+        statusEl.textContent = "メールアドレスを入力してください。";
+        statusEl.className = "status error";
+        statusEl.classList.remove("hidden");
+        return;
+      }
+      const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailPattern.test(email)) {
+        statusEl.textContent = "メールアドレスの形式が正しくありません。アドレスが間違っていると鑑定結果が届きません。";
+        statusEl.className = "status error";
+        statusEl.classList.remove("hidden");
+        return;
+      }
+
+      const others = [];
+      document.querySelectorAll(".person-row").forEach((row, i) => {
+        if (row.style.display === "none") return;
+        const lastInput = row.querySelector("[data-other-last]");
+        const firstInput = row.querySelector("[data-other-first]");
+        const birthInput = row.querySelector("[data-other-birth]");
+        const last = normalizeName(lastInput ? lastInput.value : "");
+        const first = normalizeName(firstInput ? firstInput.value : "");
+        if (lastInput) lastInput.value = last;
+        if (firstInput) firstInput.value = first;
+        if (!last && !first) return;
+        const otherBirth = birthInput ? normalizeBirthDate(birthInput.value || "") : "";
+        if (birthInput) birthInput.value = otherBirth;
+        others.push({ last_name: last || "", first_name: first || "", birth_date: otherBirth });
+      });
+
+      submitBtn.disabled = true;
+      resultArea.classList.add("hidden");
+      mailSentNotice.classList.add("hidden");
+      document.querySelector(".referral-issued")?.classList.add("hidden");
+
+      const payload = {
+        last_name,
+        first_name,
+        maiden_last_name: maiden_last_name || undefined,
+        birth_date,
+        consultation,
+        email,
+        product,
+        referral_code:
+          (document.getElementById("referral_code") &&
+            document
+              .getElementById("referral_code")
+              .value.replace(/\D/g, "")
+              .slice(0, 7)) || undefined,
+        others:
+          product === "relationship_3" ||
+          product === "relationship_5" ||
+          product === "relationship_10"
+            ? others
+            : [],
+      };
+
+      try {
+        fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          keepalive: true,
+        });
+      } catch (err) {
+        console.error("送信に失敗しました", err);
+      }
+
+      window.location.href = "/thanks";
+    });
+  </script>
+</body>
+</html>

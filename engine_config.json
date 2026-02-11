@@ -1,0 +1,120 @@
+{
+  "engine_name": "Makaren_Numerology_Engine",
+  "version": "2.0",
+  "design_concept": {
+    "philosophy": "数は性格診断ではなく運用設計のために存在する",
+    "negative_handling": "警告ではなく戦略生成の材料",
+    "contradiction_definition": "人格の破綻ではなくエネルギーの方向差",
+    "no_lucky_items_rule": true,
+    "focus": "行動・意思決定・環境設計"
+  },
+  "data_sources": {
+    "number_meanings": "external_csv",
+    "component_meanings": "external_csv",
+    "tips": "external_csv",
+    "cycle": "external_csv",
+    "axis_tags": "TAGS_sheet"
+  },
+  "axis_model": {
+    "axes": [
+      "stability",
+      "freedom",
+      "emotion",
+      "logic",
+      "practicality",
+      "empathy"
+    ],
+    "score_range": "-2 to +2",
+    "purpose": "矛盾の定量化"
+  },
+  "core_principle": {
+    "rule": "すべての構成数は核数フィルターを通して解釈する",
+    "definition": "核数＝価値判断OS",
+    "operational_meaning": [
+      "迷ったときの最終判断基準",
+      "人格の母船",
+      "他の数字の暴走を抑える制御装置"
+    ]
+  },
+  "contradiction_engine": {
+    "target_pairs": [
+      ["social", "soul"],
+      ["core", "social"],
+      ["core", "soul"],
+      ["mission", "soul"]
+    ],
+    "calculation": "abs(axis_score_a - axis_score_b)",
+    "thresholds": {
+      "0-1": "摩擦は小さい",
+      "2": "場面によって揺れる",
+      "3+": "意図的な運用が必要"
+    },
+    "interpretation_rule": [
+      "差が大きいほど人格の欠陥ではなく推進力になる",
+      "矛盾＝内部に複数の意思決定ロジックが存在する状態"
+    ]
+  },
+  "negative_output_framework": {
+    "rename_rule": {
+      "欠点": "未使用の能力",
+      "矛盾": "戦略分岐点",
+      "弱点": "運用注意点"
+    },
+    "mandatory_guidance": [
+      "善悪で判断しない",
+      "性格として固定しない",
+      "未来は行動設計で変えられる前提で語る"
+    ]
+  },
+  "behavioral_operating_system": {
+    "if_axis_gap_large": [
+      "反対軸の行動を意図的に少量取り入れる",
+      "環境でバランスを取る（人・役割・働き方）",
+      "重要判断は核数に戻す"
+    ],
+    "if_core_overdrives": [
+      "強みは過剰化すると短所になると理解する",
+      "常に『別の選択肢』を用意する"
+    ]
+  },
+  "risk_translation_rule": {
+    "policy": "リスクは必ず行動に翻訳する",
+    "example_patterns": [
+      {
+        "risk": "感情の振れ幅が大きい",
+        "translate": "重要判断は時間を置く"
+      },
+      {
+        "risk": "自由性が強すぎる",
+        "translate": "最低限の固定ルールを持つ"
+      },
+      {
+        "risk": "安定志向が強すぎる",
+        "translate": "小さな挑戦を定期的に入れる"
+      }
+    ]
+  },
+  "prohibited_outputs": [
+    "ラッキーアイテムの提示",
+    "物を持てば改善するという提案",
+    "断定的な人格評価",
+    "恐怖を煽る表現"
+  ],
+  "required_tone": {
+    "style": "構造的・現実的・非感情的",
+    "avoid": [
+      "スピリチュアル過多",
+      "抽象論のみ",
+      "運命論"
+    ]
+  },
+  "final_output_structure": [
+    "core_identity",
+    "dominant_patterns",
+    "missing_numbers_implication",
+    "contradictions",
+    "behavioral_tendencies",
+    "latent_risks",
+    "operational_guidance"
+  ]
+}
