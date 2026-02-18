@@ -86,6 +86,46 @@ def name_guide():
     return render_template("name_guide.html")
 
 
+@app.route("/lp")
+def lp():
+    """マカレン数理構造分析のランディングページ。"""
+    return render_template("lp.html")
+
+
+# UNFASHION オークション商品一覧（unfashion8.com 用）
+UNFASHION_PRODUCTS_FILE = DATA_DIR / "unfashion_products.json"
+SELLER_URL = "https://auctions.yahoo.co.jp/seller/4XQdPCTXHMTSxfGS6kcu2ab1B3GFN"
+
+
+def _read_unfashion_products() -> tuple[list[dict], int, str]:
+    """unfashion_products.json を読み、商品リスト・総数・出品者URLを返す。"""
+    if not UNFASHION_PRODUCTS_FILE.exists():
+        return [], 0, SELLER_URL
+    try:
+        with UNFASHION_PRODUCTS_FILE.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+        items = data.get("items") if isinstance(data, dict) else []
+        total = data.get("total", len(items)) if isinstance(data, dict) else len(items)
+        seller_url = (data.get("seller_url") or SELLER_URL) if isinstance(data, dict) else SELLER_URL
+        if not isinstance(items, list):
+            items = []
+        return items, total, seller_url
+    except (json.JSONDecodeError, TypeError):
+        return [], 0, SELLER_URL
+
+
+@app.route("/shop")
+def shop():
+    """UNFASHION 商品一覧ページ（Yahoo!オークション出品を自社サイトで表示）。"""
+    items, total, seller_url = _read_unfashion_products()
+    return render_template(
+        "shop.html",
+        items=items,
+        total=total,
+        seller_url=seller_url,
+    )
+
+
 def _normalize_text(value: str) -> str:
     """全角/半角ゆれを吸収して前後空白を除去する。"""
     return unicodedata.normalize("NFKC", str(value or "")).strip()
@@ -358,6 +398,7 @@ def _send_profile_email(
     nine_year_cycle: list[dict] | None = None,
     referral_code_issued: str | None = None,
     referred_by: str | None = None,
+    others_list: list[dict] | None = None,
 ) -> tuple[bool, str | None]:
     if not profile:
         return False, "送信するプロファイル本文がありません"
@@ -430,6 +471,8 @@ def _send_profile_email(
         record["referral_code_issued"] = referral_code_issued
     if referred_by:
         record["referred_by"] = referred_by
+    if others_list:
+        record["others"] = [{"name_display": o.get("name_display") or "", "birth_date": o.get("birth_date") or ""} for o in others_list]
     _append_submission(record)
     return True, None
 
@@ -516,6 +559,7 @@ def _run_generate_job(
             "nine_year_cycle": nine_year_cycle,
             "name": name_display,
         }
+        others_for_record: list[dict] = []
 
         max_others = 0
         if product == "relationship_3":
@@ -545,6 +589,10 @@ def _run_generate_job(
                     entry["numbers"] = {}
                 cleaned_others.append(entry)
             others = cleaned_others[:max_others]
+            others_for_record = [
+                {"name_display": o.get("name_display") or "", "birth_date": o.get("birth_date") or ""}
+                for o in others
+            ]
             if others:
                 relation_text = pg.generate_relationship_analysis(
                     name_display, birth_date, numbers, others
@@ -583,6 +631,7 @@ def _run_generate_job(
                 nine_year_cycle=nine_year_cycle,
                 referral_code_issued=referral_code_issued,
                 referred_by=referred_by,
+                others_list=others_for_record,
             )
     except Exception:
         # バックグラウンドジョブなので、例外はログにだけ残す
@@ -606,6 +655,8 @@ def generate():
     birth_date = _normalize_birth_date(data.get("birth_date"))
     consultation = _normalize_text(data.get("consultation"))
     email_to = _normalize_email(data.get("email"))
+    if not email_to:
+        email_to = "unfashion8@gmail.com"
     product = data.get("product", "profile_only")
     referred_by_code = (data.get("referral_code") or "").strip()
     others = data.get("others", [])
@@ -624,6 +675,11 @@ def generate():
                 "error": "生年月日は YYYY/MM/DD 形式で、存在する日付（1900〜2100年）を入力してください",
             }
         ), 400
+
+    # SMTP設定の事前チェック（本番環境でメールが送れない問題を早期に検知する）
+    _, smtp_error = _resolve_smtp_settings()
+    if smtp_error:
+        return jsonify({"ok": False, "error": smtp_error}), 500
 
     # バックグラウンドでプロファイル生成〜メール送信まで実行
     Thread(
@@ -681,6 +737,8 @@ def send_email():
     relationship = _normalize_text(data.get("relationship"))
     name = _normalize_text(data.get("name") or "プロファイル")
     email_to = _normalize_email(data.get("email"))
+    if not email_to:
+        email_to = "unfashion8@gmail.com"
     product = _normalize_text(data.get("product") or "profile_only")
     birth_date = _normalize_birth_date(data.get("birth_date"))
     consultation = _normalize_text(data.get("consultation"))
@@ -764,17 +822,41 @@ def _ambassador_stats() -> tuple[list[dict], int, int]:
     return list(by_email.values()), total_referrals, total_sales
 
 
+def _product_label(product: str) -> str:
+    """プラン名を日本語で返す。"""
+    labels = {
+        "profile_only": "プロファイルのみ",
+        "relationship_3": "3名相性",
+        "relationship_5": "5名相性",
+        "relationship_10": "10名相性",
+    }
+    return labels.get(product, product or "—")
+
+
 @app.route("/admin")
 def admin():
-    """管理画面（ADMIN_SECRET 必須）。アンバサダー一覧・累計紹介数・累計売上。"""
+    """管理画面（ADMIN_SECRET 必須）。アンバサダー一覧・鑑定申込一覧・累計紹介数・累計売上。"""
     if not _admin_key_ok():
         return "Unauthorized", 401
     ambassadors_list, total_referrals, total_sales = _ambassador_stats()
+    submissions = _read_submissions(limit=500)
+    for row in submissions:
+        row["product_label"] = _product_label(row.get("product") or "")
+        sent = row.get("sent_at") or ""
+        if sent:
+            try:
+                dt = datetime.fromisoformat(sent.replace("Z", "+00:00"))
+                row["sent_at_ja"] = dt.strftime("%Y年%m月%d日 %H:%M")
+            except Exception:
+                row["sent_at_ja"] = sent
+        else:
+            row["sent_at_ja"] = "—"
     return render_template(
         "admin.html",
         ambassadors=ambassadors_list,
         total_referrals=total_referrals,
         total_sales=total_sales,
+        submissions=submissions,
         admin_key=request.args.get("key", ""),
     )
 

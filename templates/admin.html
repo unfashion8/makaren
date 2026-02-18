@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>管理画面 — アンバサダー</title>
+  <title>管理画面 — アンバサダー・鑑定申込一覧</title>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -13,7 +13,7 @@
       background: #1a1a1a;
       color: #e8e8e8;
     }
-    .wrap { max-width: 900px; margin: 0 auto; }
+    .wrap { max-width: 1200px; margin: 0 auto; }
     h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
     .muted { color: #888; font-size: 0.9rem; margin-bottom: 2rem; }
     .stats {
@@ -68,6 +68,9 @@
     .msg { margin-top: 0.5rem; font-size: 0.9rem; }
     .msg.ok { color: #6a6; }
     .msg.err { color: #c66; }
+    .submissions-table { font-size: 0.9rem; }
+    .submissions-table td.consultation { max-width: 280px; word-break: break-word; white-space: pre-wrap; }
+    .submissions-table th { white-space: nowrap; }
   </style>
 </head>
 <body>
@@ -117,6 +120,47 @@
         </tr>
         {% else %}
         <tr><td colspan="5" style="color:#666;">アンバサダーはいません。上記から追加してください。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <h2 style="font-size:1.1rem; margin-bottom:0.75rem; margin-top:2.5rem;">鑑定申込一覧</h2>
+    <p class="muted" style="margin-bottom:1rem;">名前・生年月日・プラン・関係性（名前・生年月日）・相談内容を含む直近500件（新しい順）</p>
+    <table class="submissions-table">
+      <thead>
+        <tr>
+          <th>送信日時</th>
+          <th>名前</th>
+          <th>生年月日</th>
+          <th>メールアドレス</th>
+          <th>プラン</th>
+          <th>関係性</th>
+          <th>関係性（名前・生年月日）</th>
+          <th>相談内容</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in submissions %}
+        <tr>
+          <td>{{ s.sent_at_ja }}</td>
+          <td>{{ s.name or "—" }}</td>
+          <td>{{ s.birth_date or "—" }}</td>
+          <td>{{ s.email or "—" }}</td>
+          <td>{{ s.product_label }}</td>
+          <td>{% if s.has_relationship %}あり{% else %}—{% endif %}</td>
+          <td class="consultation">
+            {% if s.get('others') %}
+              {% for o in s.others %}
+                {{ o.name_display or "—" }} {{ o.birth_date or "" }}{% if not loop.last %}<br>{% endif %}
+              {% endfor %}
+            {% else %}
+              —
+            {% endif %}
+          </td>
+          <td class="consultation">{{ s.consultation or "—" }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" style="color:#666;">鑑定申込はまだありません。</td></tr>
         {% endfor %}
       </tbody>
     </table>

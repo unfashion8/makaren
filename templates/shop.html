@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>商品一覧 — UNFASHION | unfashion8.com</title>
+  <meta name="description" content="古美術・骨董品・レトロ雑貨など、様々な古物をオークションにて出品しています。UNFASHION（アンファッション）" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0c0b0a;
+      --surface: #141210;
+      --surface-hover: #1a1816;
+      --border: rgba(255, 255, 255, 0.08);
+      --border-strong: rgba(180, 160, 140, 0.35);
+      --text: rgba(255, 255, 255, 0.92);
+      --text-soft: rgba(255, 255, 255, 0.65);
+      --muted: rgba(255, 255, 255, 0.4);
+      --accent: #b49a78;
+      --accent-soft: rgba(180, 154, 120, 0.2);
+      --seller-url: #8b7355;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Noto Sans JP", system-ui, sans-serif;
+      font-weight: 400;
+      line-height: 1.65;
+    }
+    .header {
+      background: linear-gradient(180deg, var(--surface) 0%, var(--bg) 100%);
+      border-bottom: 1px solid var(--border);
+      padding: clamp(1.5rem, 4vw, 2.5rem) 1.5rem;
+      text-align: center;
+    }
+    .header h1 {
+      font-family: "Playfair Display", serif;
+      font-size: clamp(1.75rem, 5vw, 2.5rem);
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      color: var(--accent);
+      margin: 0 0 0.5rem;
+    }
+    .header .tagline {
+      font-size: 0.95rem;
+      color: var(--text-soft);
+      margin: 0 0 1rem;
+      max-width: 520px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .header .seller-link {
+      display: inline-block;
+      padding: 0.5rem 1.25rem;
+      background: transparent;
+      color: var(--accent);
+      border: 1px solid var(--border-strong);
+      border-radius: 999px;
+      text-decoration: none;
+      font-size: 0.9rem;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .header .seller-link:hover {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+    }
+    .wrap {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 2rem 1rem 4rem;
+    }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .search-wrap {
+      flex: 1;
+      min-width: 200px;
+      max-width: 320px;
+    }
+    .search-wrap input {
+      width: 100%;
+      padding: 0.6rem 1rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 0.95rem;
+    }
+    .search-wrap input::placeholder { color: var(--muted); }
+    .search-wrap input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    .count {
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 1.25rem;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      transition: border-color 0.25s, transform 0.2s, box-shadow 0.25s;
+      display: flex;
+      flex-direction: column;
+    }
+    .card:hover {
+      border-color: var(--accent-soft);
+      transform: translateY(-2px);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+    }
+    .card a {
+      color: inherit;
+      text-decoration: none;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+    }
+    .card-img {
+      aspect-ratio: 1;
+      background: #0a0908;
+      object-fit: cover;
+      width: 100%;
+    }
+    .card-body {
+      padding: 1rem;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    .card-title {
+      font-size: 0.9rem;
+      font-weight: 500;
+      margin: 0 0 0.5rem;
+      line-height: 1.45;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      color: var(--text);
+    }
+    .card-price {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--accent);
+      margin-top: auto;
+    }
+    .empty-state {
+      text-align: center;
+      padding: 4rem 2rem;
+      color: var(--text-soft);
+    }
+    .empty-state h2 {
+      font-size: 1.25rem;
+      color: var(--accent);
+      margin-bottom: 1rem;
+    }
+    .empty-state a {
+      display: inline-block;
+      margin-top: 1rem;
+      padding: 0.75rem 1.5rem;
+      background: var(--accent);
+      color: var(--bg);
+      border-radius: 999px;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .empty-state a:hover { opacity: 0.9; }
+    .pagination {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.5rem;
+      margin-top: 2.5rem;
+    }
+    .pagination a,
+    .pagination span {
+      display: inline-block;
+      min-width: 2.5rem;
+      padding: 0.5rem 0.75rem;
+      text-align: center;
+      border-radius: 8px;
+      font-size: 0.9rem;
+    }
+    .pagination a {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      text-decoration: none;
+    }
+    .pagination a:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .pagination .current {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .footer-note {
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-top: 2rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border);
+    }
+    .footer-note a { color: var(--accent); text-decoration: none; }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <h1>UNFASHION</h1>
+    <p class="tagline">様々な古物をご紹介しております。古美術、骨董品、美術品、レトロ雑貨、家電、生活雑貨をはじめ、オークションならではの珍しいお品も多数取り扱っております。</p>
+    <a href="{{ seller_url }}" target="_blank" rel="noopener noreferrer" class="seller-link">Yahoo!オークションで全商品を見る</a>
+  </header>
+
+  <div class="wrap">
+    <div class="toolbar">
+      <div class="search-wrap">
+        <input type="search" id="search" placeholder="商品名で検索..." aria-label="商品名で検索" />
+      </div>
+      <span class="count" id="count">{{ total }} 件</span>
+    </div>
+
+    {% if items %}
+    <div class="grid" id="grid">
+      {% for item in items %}
+      <article class="card" data-title="{{ item.title | e }}">
+        <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">
+          {% if item.image_url %}
+          <img class="card-img" src="{{ item.image_url }}" alt="" loading="lazy" />
+          {% else %}
+          <div class="card-img" style="display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:0.85rem;">No image</div>
+          {% endif %}
+          <div class="card-body">
+            <h2 class="card-title">{{ item.title }}</h2>
+            {% if item.price_label %}
+            <p class="card-price">{{ item.price_label }}</p>
+            {% endif %}
+          </div>
+        </a>
+      </article>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <h2>商品一覧の読み込み</h2>
+      <p>現在、表示する商品データがありません。<br />Yahoo!オークションの出品者ページから一覧をご覧ください。</p>
+      <a href="{{ seller_url }}" target="_blank" rel="noopener noreferrer">Yahoo!オークションでUNFASHIONの出品を見る</a>
+    </div>
+    {% endif %}
+
+    <p class="footer-note">
+      落札・お支払いは <a href="{{ seller_url }}" target="_blank" rel="noopener">Yahoo!オークション</a> にて行います。高額品の下見は unfashion8@gmail.com または 080-6567-5872 まで。
+    </p>
+  </div>
+
+  {% if items %}
+  <script>
+    (function() {
+      var search = document.getElementById("search");
+      var grid = document.getElementById("grid");
+      var countEl = document.getElementById("count");
+      var cards = grid ? grid.querySelectorAll(".card") : [];
+      var total = cards.length;
+
+      function update() {
+        var q = (search && search.value) ? search.value.trim().toLowerCase() : "";
+        var visible = 0;
+        cards.forEach(function(card) {
+            var title = (card.getAttribute("data-title") || "").toLowerCase();
+            var show = !q || title.indexOf(q) !== -1;
+            card.style.display = show ? "" : "none";
+            if (show) visible++;
+        });
+        if (countEl) countEl.textContent = visible + " 件";
+      }
+      if (search) search.addEventListener("input", update);
+      if (search) search.addEventListener("change", update);
+    })();
+  </script>
+  {% endif %}
+</body>
+</html>

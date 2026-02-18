@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>マカレン数理構造分析 — 知らなかった自分に、出会う。</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --black: #0a0a0a;
+      --black-pure: #000000;
+      --gold: #d4af37;
+      --gold-mid: #c9a961;
+      --gold-light: #f4e5c3;
+      --cream: #f5f0e6;
+      --gray: #888;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: "Noto Sans JP", sans-serif;
+      background: var(--black);
+      color: var(--cream);
+      line-height: 1.7;
+      font-weight: 400;
+      letter-spacing: 0.02em;
+    }
+    h1, h2, h3 {
+      font-family: "Cinzel", serif;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+    }
+    .gold { color: var(--gold); }
+    .container { max-width: 960px; margin: 0 auto; padding: 0 1.5rem; }
+
+    /* ----- HERO ----- */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 80% 50% at 50% 50%, rgba(212,175,55,0.06) 0%, transparent 60%),
+                  url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M50 0 L50 100 M0 50 L100 50' stroke='%23d4af37' stroke-width='0.2' opacity='0.15'/%3E%3C/svg%3E");
+      pointer-events: none;
+    }
+    .hero h1 {
+      font-size: clamp(1.75rem, 5vw, 2.5rem);
+      color: var(--gold);
+      margin-bottom: 0.75rem;
+      position: relative;
+    }
+    .hero .tagline {
+      font-size: clamp(1.25rem, 3vw, 1.5rem);
+      color: var(--gold-light);
+      margin-bottom: 0.5rem;
+      font-weight: 500;
+    }
+    .hero .subline {
+      font-size: 0.95rem;
+      color: var(--gray);
+      max-width: 420px;
+    }
+
+    /* ----- SECTIONS ----- */
+    section {
+      padding: 4rem 0;
+      border-bottom: 1px solid rgba(212,175,55,0.15);
+    }
+    section h2 {
+      font-size: clamp(1.25rem, 3vw, 1.5rem);
+      color: var(--gold);
+      margin-bottom: 2rem;
+      text-align: center;
+    }
+    .section-text {
+      max-width: 640px;
+      margin: 0 auto 1rem;
+      color: var(--cream);
+      font-size: 0.95rem;
+    }
+
+    /* ----- WHAT IS THIS ----- */
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+      align-items: center;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+    .what-image-wrap {
+      aspect-ratio: 1;
+      border: 1px solid var(--gold-mid);
+      overflow: hidden;
+      position: relative;
+      border-radius: 2px;
+    }
+    .what-image-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: 55% 20%;
+      display: block;
+    }
+    /* 周囲をグラデーションでぼかし、背景に溶け込ませる */
+    .what-image-wrap::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(
+        ellipse 80% 80% at 50% 45%,
+        transparent 0%,
+        transparent 45%,
+        rgba(10, 10, 10, 0.4) 75%,
+        rgba(10, 10, 10, 0.95) 100%
+      );
+      pointer-events: none;
+    }
+
+    /* ----- WHY NUMEROLOGY ----- */
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1.25rem;
+      max-width: 960px;
+      margin: 0 auto 2rem;
+    }
+    @media (max-width: 700px) { .grid-4 { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 420px) { .grid-4 { grid-template-columns: 1fr; } }
+    .grid-4 .card {
+      border: 1px solid rgba(212,175,55,0.35);
+      padding: 1.5rem;
+      text-align: center;
+      font-size: 0.9rem;
+      transition: box-shadow 0.3s, transform 0.2s;
+    }
+    .grid-4 .card:hover {
+      box-shadow: 0 0 24px rgba(212,175,55,0.15);
+      transform: translateY(-2px);
+    }
+    .conclusion-box {
+      max-width: 560px;
+      margin: 2rem auto 0;
+      padding: 1.5rem;
+      border: 1px solid var(--gold-mid);
+      text-align: center;
+      color: var(--gold-light);
+    }
+    .conclusion-box .sub { font-size: 0.85rem; color: var(--gray); margin-top: 0.5rem; }
+
+    /* ----- REPORT CONTENTS ----- */
+    .report-cards { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 1rem; }
+    .report-card {
+      border: 1px solid rgba(212,175,55,0.4);
+      padding: 1.5rem;
+      transition: box-shadow 0.3s, transform 0.2s;
+    }
+    .report-card:hover {
+      box-shadow: 0 0 28px rgba(212,175,55,0.12);
+      transform: translateY(-2px);
+    }
+    .report-card h3 { font-size: 1.1rem; color: var(--gold); margin-bottom: 0.75rem; }
+    .report-card ul { padding-left: 1.25rem; font-size: 0.9rem; color: var(--cream); }
+    .report-card p { font-size: 0.9rem; color: var(--gray); margin-top: 0.5rem; }
+
+    /* ----- IDEAL FOR ----- */
+    .ideal-list { max-width: 480px; margin: 0 auto; }
+    .ideal-list li {
+      list-style: none;
+      padding: 0.6rem 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      padding-left: 1.5rem;
+      position: relative;
+    }
+    .ideal-list li::before { content: "∞"; position: absolute; left: 0; color: var(--gold); opacity: 0.8; }
+
+    /* ----- PROCESS ----- */
+    .process-steps {
+      display: flex;
+      justify-content: center;
+      gap: 2rem;
+      flex-wrap: wrap;
+      max-width: 800px;
+      margin: 0 auto 1.5rem;
+    }
+    .process-step {
+      text-align: center;
+      flex: 1;
+      min-width: 140px;
+    }
+    .process-step .num {
+      width: 48px;
+      height: 48px;
+      border: 1px solid var(--gold);
+      color: var(--gold);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 0.75rem;
+      font-family: "Cinzel", serif;
+    }
+    .process-step p { font-size: 0.9rem; color: var(--cream); }
+    .process-note { text-align: center; font-size: 0.85rem; color: var(--gray); }
+
+    /* ----- WHY AI ----- */
+    .why-ai .section-text { margin-bottom: 1rem; }
+    .why-ai ul { max-width: 480px; margin: 0 auto; padding-left: 1.25rem; color: var(--cream); font-size: 0.95rem; }
+
+    /* ----- PRICING ----- */
+    .pricing-table {
+      max-width: 420px;
+      margin: 0 auto;
+      border: 1px solid rgba(212,175,55,0.4);
+    }
+    .pricing-table tr { border-bottom: 1px solid rgba(212,175,55,0.2); }
+    .pricing-table td { padding: 0.75rem 1rem; }
+    .pricing-table td:first-child { color: var(--gold-light); }
+    .pricing-table td:last-child { text-align: right; color: var(--gold); font-weight: 500; }
+    .pricing-tagline { text-align: center; margin-bottom: 1.5rem; color: var(--gold-light); font-size: 0.95rem; }
+
+    /* ----- DISCLAIMERS ----- */
+    .disclaimers { font-size: 0.8rem; color: var(--gray); max-width: 560px; margin: 0 auto; }
+
+    /* ----- CTA ----- */
+    .cta-section { padding: 4rem 0; text-align: center; }
+    .cta-section .btn {
+      display: inline-block;
+      padding: 1.25rem 3rem;
+      background: rgba(212,175,55,0.08);
+      border: 2px solid var(--gold);
+      color: var(--gold-light);
+      font-family: "Noto Sans JP", sans-serif;
+      font-size: 1.15rem;
+      font-weight: 600;
+      text-decoration: none;
+      letter-spacing: 0.06em;
+      transition: box-shadow 0.3s, background 0.3s, color 0.3s, border-color 0.3s;
+      box-shadow: 0 0 32px rgba(212,175,55,0.2);
+    }
+    .cta-section .btn:hover {
+      background: rgba(212,175,55,0.2);
+      box-shadow: 0 0 40px rgba(212,175,55,0.35);
+      color: #fff;
+      border-color: var(--gold-light);
+    }
+
+    /* ----- FOOTER NEUTRAL ----- */
+    .neutral-box {
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 1.5rem;
+      border: 1px solid rgba(212,175,55,0.25);
+      font-size: 0.85rem;
+      color: var(--gray);
+    }
+    .neutral-box h3 { font-size: 0.95rem; color: var(--gold-mid); margin-bottom: 0.5rem; }
+
+    /* ----- SCROLL ANIMATION ----- */
+    .reveal { opacity: 0; transform: translateY(20px); transition: opacity 0.6s, transform 0.6s; }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+  </style>
+</head>
+<body>
+  <!-- HERO -->
+  <header class="hero" id="hero">
+    <h1>マカレン数理構造分析</h1>
+    <p class="tagline">知らなかった自分に、出会う。</p>
+    <p class="subline">数字は偶然ではない。あなたという存在の「構造」を可視化する。</p>
+  </header>
+
+  <!-- WHAT IS THIS -->
+  <section class="reveal" id="what">
+    <div class="container">
+      <h2>このサービスは何か</h2>
+      <div class="two-col">
+        <div>
+          <p class="section-text">本サービスは、カバラ数秘術の理論体系を基盤とし、生年月日および氏名情報を数理ロジックで解析するAI統計構造分析レポートです。</p>
+          <p class="section-text">霊感・宗教的儀式・未来予言は一切含みません。扱うのは「数値パターン」と「構造傾向」です。</p>
+        </div>
+        <div class="what-image-wrap" aria-hidden="true">
+          <img src="{{ url_for('static', filename='images/lp-appraiser.png') }}" alt="" />
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- WHY NUMEROLOGY -->
+  <section class="reveal" id="why">
+    <div class="container">
+      <h2>数秘術はなぜ成り立つのか</h2>
+      <div class="grid-4">
+        <div class="card">数は分類のための言語である</div>
+        <div class="card">人間はパターンの集合体である</div>
+        <div class="card">生年月日は一意の識別情報である</div>
+        <div class="card">パターン抽出は統計的思考と同質である</div>
+      </div>
+      <div class="conclusion-box">
+        <p>個人データを数理体系に当てはめ、傾向を抽出する分析行為</p>
+        <p class="sub">心理テストや性格分析と同じく、傾向の可視化ツールとして機能します。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- REPORT CONTENTS -->
+  <section class="reveal" id="contents">
+    <div class="container">
+      <h2>レポート内容</h2>
+      <div class="report-cards">
+        <div class="report-card">
+          <h3>基本プロファイル（PDF 4ページ）</h3>
+          <ul>
+            <li>本質構造数</li>
+            <li>表層人格数</li>
+            <li>潜在傾向数</li>
+            <li>核心構造とバランス分析</li>
+          </ul>
+          <p>数値ごとの象徴性を、具体的な行動傾向・思考傾向として解説します。</p>
+        </div>
+        <div class="report-card">
+          <h3>関係性分析（最大＋4ページ）</h3>
+          <ul>
+            <li>相互影響構造</li>
+            <li>エネルギーバランス</li>
+            <li>補完性・摩擦点</li>
+            <li>関係改善の視点</li>
+          </ul>
+          <p>数値の相互作用を構造図として解説。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- IDEAL FOR -->
+  <section class="reveal" id="ideal">
+    <div class="container">
+      <h2>こんな方に</h2>
+      <ul class="ideal-list">
+        <li>自己理解を深めたい</li>
+        <li>人間関係を整理したい</li>
+        <li>意思決定の傾向を知りたい</li>
+        <li>自分の強みを言語化したい</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- PROCESS -->
+  <section class="reveal" id="process">
+    <div class="container">
+      <h2>仕組み</h2>
+      <div class="process-steps">
+        <div class="process-step">
+          <div class="num">1</div>
+          <p>生年月日・氏名入力</p>
+        </div>
+        <div class="process-step">
+          <div class="num">2</div>
+          <p>AIが数理構造を解析</p>
+        </div>
+        <div class="process-step">
+          <div class="num">3</div>
+          <p>PDFレポート納品</p>
+        </div>
+      </div>
+      <p class="process-note">完全オンライン。人の主観は介在しません。</p>
+    </div>
+  </section>
+
+  <!-- WHY AI -->
+  <section class="reveal" id="why-ai">
+    <div class="container why-ai">
+      <h2>なぜAIなのか</h2>
+      <p class="section-text">従来の数秘術は解釈者依存でした。</p>
+      <p class="section-text">本サービスでは、</p>
+      <ul>
+        <li>計算ロジックを完全固定化</li>
+        <li>解釈パターンをデータベース化</li>
+        <li>出力を標準化</li>
+      </ul>
+      <p class="section-text">することで、再現性のある分析を実現しています。</p>
+    </div>
+  </section>
+
+  <!-- PRICING -->
+  <section class="reveal" id="pricing">
+    <div class="container">
+      <h2>価格</h2>
+      <p class="pricing-tagline">自分の構造を知ることは、人生の設計図を手にすること。</p>
+      <table class="pricing-table">
+        <tr><td>プロファイル</td><td>¥1,000</td></tr>
+        <tr><td>関係性（3名）</td><td>¥4,000</td></tr>
+        <tr><td>関係性（5名）</td><td>¥5,000</td></tr>
+        <tr><td>関係性（10名）</td><td>¥7,000</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- DISCLAIMERS -->
+  <section class="reveal" id="disclaimers">
+    <div class="container">
+      <h2>注意事項</h2>
+      <p class="disclaimers">本サービスは数理的自己分析レポートです。医療・法律・投資判断を目的としたものではありません。未来の出来事を断定するものではありません。</p>
+    </div>
+  </section>
+
+  <!-- FINAL CTA -->
+  <section class="cta-section reveal" id="cta">
+    <div class="container">
+      <a href="/" class="btn" id="cta-btn">今すぐ、あなたの構造を可視化する</a>
+    </div>
+  </section>
+
+  <!-- NEUTRAL OPINION -->
+  <section class="reveal" id="neutral">
+    <div class="container">
+      <div class="neutral-box">
+        <h3>中立的意見</h3>
+        <p>数秘術は科学ではありません。しかし、象徴体系としては一貫性があります。統計そのものというより「分類理論」に近い立ち位置です。</p>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    (function() {
+      var reveals = document.querySelectorAll(".reveal");
+      function reveal() {
+        reveals.forEach(function(el) {
+          var rect = el.getBoundingClientRect();
+          if (rect.top < window.innerHeight - 80) el.classList.add("visible");
+        });
+      }
+      window.addEventListener("scroll", reveal);
+      window.addEventListener("load", reveal);
+    })();
+  </script>
+</body>
+</html>

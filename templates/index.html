@@ -70,6 +70,21 @@
       margin-top: 0.4em;
       opacity: 0.9;
     }
+    .hero-about {
+      margin: clamp(1.25rem, 4vw, 2rem) 0 0;
+      font-size: 0.95rem;
+    }
+    .hero-about a {
+      color: var(--gold);
+      text-decoration: none;
+      letter-spacing: 0.04em;
+      border-bottom: 1px solid rgba(201, 162, 74, 0.4);
+      transition: opacity 0.2s, border-color 0.2s;
+    }
+    .hero-about a:hover {
+      opacity: 0.9;
+      border-color: var(--gold);
+    }
     .hero::after {
       /* gold hairline accent */
       content: "";
@@ -327,6 +342,7 @@
     <p class="hero-line">知らなかった自分に、出会う。</p>
     <p class="hero-line">数字は偶然ではない。</p>
     <p class="hero-line">あなたという存在の設計図である。</p>
+    <p class="hero-about"><a href="/lp">マカレン数秘術について</a></p>
   </header>
 
   <div class="wrap">
@@ -334,22 +350,18 @@
       <div class="card selected" data-product="profile_only">
         <h3>自分の占いプロファイル</h3>
         <div class="price">¥{{ price_profile_display }}</div>
-        <p class="desc">核となる自己・パターン・運用ガイダンスまで</p>
       </div>
       <div class="card" data-product="relationship_3">
         <h3>プロファイル ＋ 関係性（3名まで）</h3>
         <div class="price">¥{{ total_r3_display }}</div>
-        <p class="desc">上記 ＋ 3名まで 3,000円</p>
       </div>
       <div class="card" data-product="relationship_5">
         <h3>プロファイル ＋ 関係性（5名まで）</h3>
         <div class="price">¥{{ total_r5_display }}</div>
-        <p class="desc">上記 ＋ 5名まで 4,000円</p>
       </div>
       <div class="card" data-product="relationship_10">
         <h3>プロファイル ＋ 関係性（10名まで）</h3>
         <div class="price">¥{{ total_r10_display }}</div>
-        <p class="desc">上記 ＋ 10名まで 6,000円</p>
       </div>
     </div>
 
@@ -648,14 +660,8 @@
         statusEl.classList.remove("hidden");
         return;
       }
-      if (!email) {
-        statusEl.textContent = "メールアドレスを入力してください。";
-        statusEl.className = "status error";
-        statusEl.classList.remove("hidden");
-        return;
-      }
       const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailPattern.test(email)) {
+      if (email && !emailPattern.test(email)) {
         statusEl.textContent = "メールアドレスの形式が正しくありません。アドレスが間違っていると鑑定結果が届きません。";
         statusEl.className = "status error";
         statusEl.classList.remove("hidden");
@@ -705,18 +711,45 @@
             : [],
       };
 
-      try {
-        fetch("/api/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-          keepalive: true,
-        });
-      } catch (err) {
-        console.error("送信に失敗しました", err);
-      }
+      statusEl.textContent = "鑑定を受け付けています。まもなくメール送信を開始します…。";
+      statusEl.className = "status loading";
+      statusEl.classList.remove("hidden");
 
-      window.location.href = "/thanks";
+      fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        keepalive: true,
+      })
+        .then(async (res) => {
+          let data = null;
+          try {
+            data = await res.json();
+          } catch (e) {
+            // レスポンスがJSONでない場合もあるので握りつぶす
+          }
+
+          if (!res.ok || (data && data.ok === false)) {
+            const msg =
+              (data && data.error) ||
+              "送信中にエラーが発生しました。時間をおいて再度お試しください。";
+            statusEl.textContent = msg;
+            statusEl.className = "status error";
+            submitBtn.disabled = false;
+            return;
+          }
+
+          statusEl.textContent = "鑑定を受け付けました。まもなくメールをお送りします。";
+          statusEl.className = "status success";
+          window.location.href = "/thanks";
+        })
+        .catch((err) => {
+          console.error("送信に失敗しました", err);
+          statusEl.textContent =
+            "送信に失敗しました。通信環境をご確認のうえ、しばらくしてから再度お試しください。";
+          statusEl.className = "status error";
+          submitBtn.disabled = false;
+        });
     });
   </script>
 </body>
