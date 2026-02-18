@@ -8,6 +8,7 @@ import random
 import unicodedata
 import json
 import smtplib
+import logging
 from email.message import EmailMessage
 from pathlib import Path
 from datetime import datetime, timezone
@@ -20,6 +21,12 @@ import pdf_generator as pdfgen
 import io
 
 load_dotenv()
+
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger("makaren.mail")
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 
@@ -401,12 +408,15 @@ def _send_profile_email(
     others_list: list[dict] | None = None,
 ) -> tuple[bool, str | None]:
     if not profile:
+        logger.error("[send_email] プロファイル本文が空のため送信できません email=%s product=%s", email_to, product)
         return False, "送信するプロファイル本文がありません"
     if not _is_valid_email(email_to):
+        logger.error("[send_email] メールアドレス形式が不正です email=%s", email_to)
         return False, "メールアドレスの形式が正しくありません"
 
     smtp_settings, smtp_error = _resolve_smtp_settings()
     if smtp_error:
+        logger.error("[send_email] SMTP設定エラー email=%s error=%s", email_to, smtp_error)
         return False, smtp_error
 
     full_content = profile
@@ -424,6 +434,7 @@ def _send_profile_email(
             nine_year_cycle=nine_year_cycle or [],
         )
     except Exception as e:
+        logger.exception("[send_email] PDF作成エラー email=%s product=%s", email_to, product)
         return False, f"PDFの作成に失敗しました: {e}"
 
     subject, body = _email_subject_and_body(product, name)
@@ -441,6 +452,14 @@ def _send_profile_email(
     )
 
     try:
+        logger.info(
+            "[send_email] 送信開始 email=%s from=%s host=%s port=%s product=%s",
+            email_to,
+            smtp_settings["smtp_from"],
+            smtp_settings["smtp_host"],
+            smtp_settings["smtp_port"],
+            product,
+        )
         if smtp_settings["smtp_use_ssl"]:
             with smtplib.SMTP_SSL(
                 smtp_settings["smtp_host"], smtp_settings["smtp_port"], timeout=30
@@ -455,7 +474,9 @@ def _send_profile_email(
                     server.starttls()
                 server.login(smtp_settings["smtp_user"], smtp_settings["smtp_password"])
                 server.send_message(msg)
+        logger.info("[send_email] 送信完了 email=%s product=%s", email_to, product)
     except Exception as e:
+        logger.exception("[send_email] メール送信エラー email=%s product=%s", email_to, product)
         return False, f"メール送信に失敗しました: {e}"
 
     record = {
@@ -474,6 +495,7 @@ def _send_profile_email(
     if others_list:
         record["others"] = [{"name_display": o.get("name_display") or "", "birth_date": o.get("birth_date") or ""} for o in others_list]
     _append_submission(record)
+    logger.info("[send_email] 送信記録を保存しました email=%s product=%s", email_to, product)
     return True, None
 
 
@@ -511,10 +533,14 @@ def _run_generate_job(
     referred_by_code: str,
     others: list,
 ) -> None:
-    """プロファイル生成〜PDF作成・メール送信までをバックグラウンドで実行するジョブ。
-
-    HTTPレスポンスとは切り離して実行されるため、ユーザーがページ遷移しても処理は最後まで継続する。
-    """
+    """プロファイル生成〜PDF作成・メール送信までをバックグラウンドで実行するジョブ。"""
+    logger.info(
+        "[generate_job] 開始 last_name=%s first_name=%s email=%s product=%s",
+        last_name,
+        first_name,
+        email_to,
+        product,
+    )
     try:
         import numerology as num
 
@@ -619,7 +645,7 @@ def _run_generate_job(
                 referrer_email = _referrer_email_by_code(referred_by)
                 if referrer_email and referrer_email != email_to and _is_ambassador(referrer_email):
                     _append_ambassador_earning(referrer_email, email_to, order_amount)
-            _send_profile_email(
+            sent_ok, sent_err = _send_profile_email(
                 profile=profile_text,
                 relationship=result.get("relationship") or "",
                 name=name_display,
@@ -633,11 +659,31 @@ def _run_generate_job(
                 referred_by=referred_by,
                 others_list=others_for_record,
             )
+            if sent_ok:
+                logger.info(
+                    "[generate_job] メール送信成功 email=%s product=%s referral=%s",
+                    email_to,
+                    product,
+                    referral_code_issued or "",
+                )
+            else:
+                logger.error(
+                    "[generate_job] メール送信失敗 email=%s product=%s error=%s",
+                    email_to,
+                    product,
+                    sent_err or "",
+                )
     except Exception:
-        # バックグラウンドジョブなので、例外はログにだけ残す
         import traceback
 
         traceback.print_exc()
+        logger.exception(
+            "[generate_job] 予期しないエラー last_name=%s first_name=%s email=%s product=%s",
+            last_name,
+            first_name,
+            email_to,
+            product,
+        )
 
 
 @app.route("/api/generate", methods=["POST"])
