@@ -164,6 +164,38 @@
         {% endfor %}
       </tbody>
     </table>
+
+    <h2 style="font-size:1.1rem; margin-bottom:0.75rem; margin-top:2.5rem;">レビュー・作品生成ワークフロー</h2>
+    <p class="muted" style="margin-bottom:1rem;">Supabaseに保存された直近100件。専用URLの生トークンは保存・表示しません。</p>
+    {% if workflow_error %}<p class="msg err">ワークフローを読み込めませんでした。</p>{% endif %}
+    <table class="submissions-table">
+      <thead>
+        <tr>
+          <th>受付日時</th>
+          <th>名前</th>
+          <th>メール</th>
+          <th>状態</th>
+          <th>現在版</th>
+          <th>修正回数</th>
+          <th>エラー</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for w in workflows %}
+        <tr>
+          <td>{{ w.created_at_ja or "—" }}</td>
+          <td>{{ w.customer_name or "—" }}</td>
+          <td>{{ w.email or "—" }}</td>
+          <td>{{ w.status_label }}</td>
+          <td>v{{ w.current_version }}</td>
+          <td>{{ w.revision_count }} / {{ w.max_revisions }}</td>
+          <td class="consultation">{{ w.last_error or "—" }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" style="color:#666;">ワークフローはまだありません。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
 
   <script>
