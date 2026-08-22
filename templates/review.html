@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow,noarchive" />
+  <title>鑑定と作品の確認 — マカレン数秘術</title>
+  <style>
+    :root {
+      --bg: #070708;
+      --surface: #111217;
+      --border: rgba(255,255,255,.12);
+      --text: rgba(255,255,255,.92);
+      --muted: rgba(255,255,255,.58);
+      --gold: #c9a24a;
+      --ok: #80c49a;
+      --error: #e08c8c;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: radial-gradient(circle at top, #14151a 0, var(--bg) 55%); color: var(--text); font-family: system-ui, -apple-system, "Noto Sans JP", sans-serif; line-height: 1.75; }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 3rem 1.25rem 5rem; }
+    h1, h2 { font-family: "Hiragino Mincho ProN", "Yu Mincho", serif; font-weight: 500; }
+    h1 { margin: 0 0 .4rem; font-size: clamp(1.8rem, 5vw, 2.6rem); letter-spacing: .08em; }
+    h2 { color: var(--gold); margin-top: 0; }
+    .muted { color: var(--muted); }
+    .panel { background: rgba(17,18,23,.94); border: 1px solid var(--border); border-radius: 16px; padding: clamp(1.2rem, 4vw, 2rem); margin-top: 1.5rem; }
+    .art { width: 100%; max-height: 72vh; object-fit: contain; display: block; background: #050506; border-radius: 10px; }
+    .report { white-space: pre-wrap; max-height: 62vh; overflow: auto; padding-right: .5rem; }
+    .status { padding: .9rem 1rem; border-radius: 8px; background: rgba(201,162,74,.12); border: 1px solid rgba(201,162,74,.35); }
+    .message { margin-top: 1rem; min-height: 1.5rem; }
+    .message.ok { color: var(--ok); }
+    .message.error { color: var(--error); }
+    label { display: block; color: var(--muted); font-size: .9rem; margin: 1rem 0 .35rem; }
+    input, select, textarea { width: 100%; border: 1px solid var(--border); border-radius: 8px; background: #090a0d; color: var(--text); padding: .8rem .9rem; font: inherit; }
+    textarea { min-height: 150px; resize: vertical; }
+    .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0 1rem; }
+    @media (max-width: 650px) { .grid { grid-template-columns: 1fr; } }
+    .actions { display: flex; gap: .75rem; flex-wrap: wrap; margin-top: 1.25rem; }
+    button, .button { border: 0; border-radius: 999px; background: var(--gold); color: #111; padding: .85rem 1.4rem; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; }
+    button.secondary, .button.secondary { background: transparent; color: var(--text); border: 1px solid rgba(201,162,74,.55); }
+    button:disabled { opacity: .5; cursor: wait; }
+    details summary { cursor: pointer; color: var(--gold); }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <h1>鑑定と作品の確認</h1>
+    <p class="muted">{{ workflow.customer_name }} 様専用・Version {{ workflow.current_version }}</p>
+
+    {% if workflow.status in ['revision_requested', 'regenerating'] %}
+      <div class="status">ご指摘を反映して再生成しています。完成後にメールでお知らせします。</div>
+    {% elif workflow.status == 'failed' %}
+      <div class="status">生成処理を確認中です。恐れ入りますが、しばらくお待ちください。</div>
+    {% elif workflow.status in ['approved', 'finalizing', 'delivered'] %}
+      <div class="status">この版は承認済みです。{% if workflow.status == 'delivered' %}最終PDFをメールでお送りしました。{% else %}最終PDFを送信しています。{% endif %}</div>
+    {% endif %}
+
+    {% if version %}
+      {% if art_url %}
+      <section class="panel">
+        <h2>パーソナルアート</h2>
+        <img class="art" src="{{ art_url }}" alt="生成されたパーソナルアート" />
+      </section>
+      {% endif %}
+
+      <section class="panel">
+        <h2>鑑定書</h2>
+        {% if pdf_url %}<p><a class="button secondary" href="{{ pdf_url }}" rel="noreferrer">PDFプレビューを開く</a></p>{% endif %}
+        <details>
+          <summary>本文をページ内で読む</summary>
+          <div class="report">{{ version.profile_text }}</div>
+          {% if version.relationship_text %}
+            <h2 style="margin-top:2rem;">関係性分析</h2>
+            <div class="report">{{ version.relationship_text }}</div>
+          {% endif %}
+        </details>
+      </section>
+    {% endif %}
+
+    {% if workflow.status == 'awaiting_review' and version %}
+      <section class="panel">
+        <h2>内容を確認する</h2>
+        <p class="muted">修正可能回数: 残り {{ workflow.max_revisions - workflow.revision_count }} 回</p>
+        <form id="feedbackForm">
+          <label for="target">修正する対象</label>
+          <select id="target" name="target">
+            <option value="all">鑑定書と作品の両方</option>
+            <option value="profile">鑑定書と、それに合わせた作品</option>
+            <option value="art">作品のみ</option>
+            {% if version.relationship_text %}<option value="relationship">関係性分析のみ</option>{% endif %}
+          </select>
+          <label for="instruction">具体的な指摘・修正内容</label>
+          <textarea id="instruction" maxlength="4000" required placeholder="例: 青を少なくして、静けさよりも前進する力を強く感じる作品にしてください。鑑定書の仕事に関する説明も、現在の実感に合わせて修正してください。"></textarea>
+          <div class="actions">
+            <button type="submit" id="feedbackBtn" class="secondary">修正を依頼する</button>
+            <button type="button" id="approveBtn">この版を承認する</button>
+          </div>
+        </form>
+        <div id="reviewMessage" class="message" aria-live="polite"></div>
+      </section>
+    {% endif %}
+
+    {% if workflow.status == 'delivered' %}
+      <section class="panel">
+        <h2>額装を希望する</h2>
+        <p class="muted">希望仕様を保存し、個別見積へ引き継ぎます。確定注文や決済はまだ行われません。</p>
+        <form id="framingForm">
+          <div class="grid">
+            <div><label for="size">希望サイズ</label><input id="size" required placeholder="A3 / A2 / 600×900mm など" /></div>
+            <div><label for="paper">用紙</label><input id="paper" placeholder="おまかせ / ファインアート紙 など" /></div>
+            <div><label for="frame_style">額装スタイル</label><input id="frame_style" required placeholder="木製・細縁 / アルミ など" /></div>
+            <div><label for="frame_color">額の色</label><input id="frame_color" placeholder="黒 / ナチュラル / おまかせ" /></div>
+            <div><label for="shipping_name">お届け先氏名</label><input id="shipping_name" /></div>
+            <div><label for="postal_code">郵便番号</label><input id="postal_code" inputmode="numeric" /></div>
+          </div>
+          <label for="address">住所</label><input id="address" />
+          <label for="phone">電話番号</label><input id="phone" inputmode="tel" />
+          <label for="frame_notes">その他の希望</label><textarea id="frame_notes" style="min-height:90px;"></textarea>
+          <div class="actions"><button type="submit" id="framingBtn">額装希望を送る</button></div>
+        </form>
+        <div id="framingMessage" class="message" aria-live="polite"></div>
+      </section>
+    {% endif %}
+  </main>
+
+  <script>
+    const token = {{ token|tojson }};
+    const versionNo = {{ (workflow.current_version or 0)|tojson }};
+    const reviewMessage = document.getElementById("reviewMessage");
+
+    function showMessage(el, text, ok) {
+      if (!el) return;
+      el.textContent = text;
+      el.className = "message " + (ok ? "ok" : "error");
+    }
+
+    document.getElementById("feedbackForm")?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const button = document.getElementById("feedbackBtn");
+      button.disabled = true;
+      try {
+        const response = await fetch(`/api/review/${encodeURIComponent(token)}/feedback`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            target: document.getElementById("target").value,
+            instruction: document.getElementById("instruction").value.trim(),
+            base_version: versionNo,
+          }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || "保存できませんでした");
+        showMessage(reviewMessage, data.message, true);
+        setTimeout(() => location.reload(), 1000);
+      } catch (error) {
+        showMessage(reviewMessage, error.message, false);
+        button.disabled = false;
+      }
+    });
+
+    document.getElementById("approveBtn")?.addEventListener("click", async () => {
+      if (!confirm("この版を最終版として承認しますか？")) return;
+      const button = document.getElementById("approveBtn");
+      button.disabled = true;
+      try {
+        const response = await fetch(`/api/review/${encodeURIComponent(token)}/approve`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ version: versionNo }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || "承認できませんでした");
+        showMessage(reviewMessage, data.message, true);
+        setTimeout(() => location.reload(), 1200);
+      } catch (error) {
+        showMessage(reviewMessage, error.message, false);
+        button.disabled = false;
+      }
+    });
+
+    document.getElementById("framingForm")?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const button = document.getElementById("framingBtn");
+      const message = document.getElementById("framingMessage");
+      button.disabled = true;
+      const value = (id) => document.getElementById(id)?.value.trim() || "";
+      try {
+        const response = await fetch(`/api/review/${encodeURIComponent(token)}/framing`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            size: value("size"), paper: value("paper"), frame_style: value("frame_style"),
+            frame_color: value("frame_color"), shipping_name: value("shipping_name"),
+            postal_code: value("postal_code"), address: value("address"), phone: value("phone"),
+            frame_notes: value("frame_notes"),
+          }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || "保存できませんでした");
+        showMessage(message, data.message, true);
+      } catch (error) {
+        showMessage(message, error.message, false);
+      } finally {
+        button.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
