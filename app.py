@@ -14,10 +14,19 @@ from pathlib import Path
 from datetime import datetime, timezone
 from datetime import date
 from threading import Thread
-from flask import Flask, request, jsonify, render_template, send_file
+from flask import Flask, request, jsonify, render_template, send_file, make_response
 from dotenv import load_dotenv
 import profile_generator as pg
 import pdf_generator as pdfgen
+from makaren_workflow import (
+    WorkflowStoreError,
+    generate_artwork,
+    generate_review_token,
+    get_workflow_store,
+    hash_review_token,
+    workflow_config_error,
+    workflow_enabled,
+)
 import io
 
 load_dotenv()
@@ -393,6 +402,61 @@ def _email_subject_and_body(product: str, name: str) -> tuple[str, str]:
     return subject, body
 
 
+def _send_plain_email(email_to: str, subject: str, body: str) -> tuple[bool, str | None]:
+    """Send a small notification email without attachments."""
+    if not _is_valid_email(email_to):
+        return False, "メールアドレスの形式が正しくありません"
+    smtp_settings, smtp_error = _resolve_smtp_settings()
+    if smtp_error:
+        return False, smtp_error
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = smtp_settings["smtp_from"]
+    msg["To"] = email_to
+    msg.set_content(body)
+    try:
+        if smtp_settings["smtp_use_ssl"]:
+            with smtplib.SMTP_SSL(
+                smtp_settings["smtp_host"], smtp_settings["smtp_port"], timeout=30
+            ) as server:
+                server.login(smtp_settings["smtp_user"], smtp_settings["smtp_password"])
+                server.send_message(msg)
+        else:
+            with smtplib.SMTP(
+                smtp_settings["smtp_host"], smtp_settings["smtp_port"], timeout=30
+            ) as server:
+                if smtp_settings["smtp_use_tls"]:
+                    server.starttls()
+                server.login(smtp_settings["smtp_user"], smtp_settings["smtp_password"])
+                server.send_message(msg)
+        return True, None
+    except Exception as exc:
+        logger.exception("[workflow_email] notification failed email=%s", email_to)
+        return False, f"メール送信に失敗しました: {exc}"
+
+
+def _send_review_email(
+    email_to: str,
+    name: str,
+    review_url: str,
+    *,
+    revised: bool = False,
+) -> tuple[bool, str | None]:
+    subject = "修正版の確認をお願いします — マカレン数秘術" if revised else "鑑定と作品の確認をお願いします — マカレン数秘術"
+    opening = "ご指摘を反映した修正版が完成しました。" if revised else "鑑定書とパーソナルアートの初稿が完成しました。"
+    body = (
+        f"{name} 様\n\n"
+        f"{opening}\n"
+        "下記の専用ページで内容をご確認ください。\n\n"
+        f"{review_url}\n\n"
+        "修正したい点がある場合は、ページ内から具体的にお知らせください。\n"
+        "内容に問題がなければ承認してください。承認後、最終PDFをメールでお送りします。\n\n"
+        "このURLはご本人専用です。第三者へ転送しないでください。\n\n"
+        "――\nマカレン数秘術\nKIMURA KENJI\n"
+    )
+    return _send_plain_email(email_to, subject, body)
+
+
 def _send_profile_email(
     profile: str,
     relationship: str,
@@ -406,6 +470,8 @@ def _send_profile_email(
     referral_code_issued: str | None = None,
     referred_by: str | None = None,
     others_list: list[dict] | None = None,
+    artwork_bytes: bytes | None = None,
+    pdf_bytes_override: bytes | None = None,
 ) -> tuple[bool, str | None]:
     if not profile:
         logger.error("[send_email] プロファイル本文が空のため送信できません email=%s product=%s", email_to, product)
@@ -426,16 +492,19 @@ def _send_profile_email(
         full_content += "\n\n[[PAGEBREAK]]\n\n" + relationship
     title = f"マカレン数秘術 プロファイル — {name}"
 
-    try:
-        pdf_bytes = pdfgen.build_pdf(
-            full_content,
-            title=title,
-            numbers=numbers or {},
-            nine_year_cycle=nine_year_cycle or [],
-        )
-    except Exception as e:
-        logger.exception("[send_email] PDF作成エラー email=%s product=%s", email_to, product)
-        return False, f"PDFの作成に失敗しました: {e}"
+    pdf_bytes = pdf_bytes_override
+    if pdf_bytes is None:
+        try:
+            pdf_bytes = pdfgen.build_pdf(
+                full_content,
+                title=title,
+                numbers=numbers or {},
+                nine_year_cycle=nine_year_cycle or [],
+                artwork_bytes=artwork_bytes,
+            )
+        except Exception as e:
+            logger.exception("[send_email] PDF作成エラー email=%s product=%s", email_to, product)
+            return False, f"PDFの作成に失敗しました: {e}"
 
     subject, body = _email_subject_and_body(product, name)
     msg = EmailMessage()
@@ -494,8 +563,13 @@ def _send_profile_email(
         record["referred_by"] = referred_by
     if others_list:
         record["others"] = [{"name_display": o.get("name_display") or "", "birth_date": o.get("birth_date") or ""} for o in others_list]
-    _append_submission(record)
-    logger.info("[send_email] 送信記録を保存しました email=%s product=%s", email_to, product)
+    try:
+        _append_submission(record)
+        logger.info("[send_email] 送信記録を保存しました email=%s product=%s", email_to, product)
+    except Exception:
+        # SMTP送信後のローカル記録失敗を「未送信」と扱うと再送が重複するため、
+        # 納品自体は成功として扱い、記録エラーだけをログに残す。
+        logger.exception("[send_email] 送信記録の保存に失敗しました email=%s", email_to)
     return True, None
 
 
@@ -522,6 +596,112 @@ def _parse_birth_date(birth_date: str):
     return y, month, day
 
 
+def _generate_analysis(
+    last_name: str,
+    first_name: str,
+    maiden_last_name: str,
+    birth_date: str,
+    consultation: str,
+    product: str,
+    others: list,
+) -> dict:
+    """Generate the shared profile/relationship payload used by both delivery modes."""
+    import numerology as num
+
+    y, m, d = _parse_birth_date(birth_date)
+    if y is None or m is None or d is None:
+        raise ValueError("生年月日が不正です")
+    numbers = num.compute_all(last_name, first_name, y, m, d)
+    nine_year_cycle = num.compute_nine_year_cycle(y, m, d)
+    numbers_maiden = None
+    if maiden_last_name and maiden_last_name != last_name:
+        numbers_maiden = num.compute_all(maiden_last_name, first_name, y, m, d)
+    name_display = f"{last_name} {first_name}"
+    consultation_for_llm = consultation or (
+        "本人から具体的な相談内容はないため、あなたが構成数の傾向から見て特に重要だと考えるテーマ"
+        "（キャリア・人間関係・自己表現・お金・パートナーシップなどの中から1つ）を選び、"
+        "そのテーマへのガイダンスも併せて含めてください。"
+    )
+    profile_text = _strip_markdown(
+        pg.generate_profile(
+            last_name,
+            first_name,
+            birth_date,
+            consultation_for_llm,
+            numbers,
+            nine_year_cycle,
+            maiden_last_name=maiden_last_name or None,
+            numbers_maiden=numbers_maiden,
+        )
+    )
+    result: dict = {
+        "ok": True,
+        "profile": profile_text,
+        "relationship": None,
+        "product": product,
+        "numbers": numbers,
+        "numbers_maiden": numbers_maiden,
+        "nine_year_cycle": nine_year_cycle,
+        "name": name_display,
+        "others": [],
+    }
+    max_others = {
+        "relationship_3": 3,
+        "relationship_5": 5,
+        "relationship_10": 10,
+    }.get(product, 0)
+    if max_others and others:
+        cleaned_others = []
+        for other in others:
+            last = _normalize_name(other.get("last_name") or "")
+            first = _normalize_name(other.get("first_name") or "")
+            if not last and not first:
+                continue
+            other_birth = _normalize_birth_date(other.get("birth_date") or "")
+            entry = {
+                "last_name": last,
+                "first_name": first,
+                "birth_date": other_birth,
+                "name_display": f"{last} {first}".strip() or "（名前未入力）",
+                "numbers": {},
+            }
+            y2, m2, d2 = _parse_birth_date(other_birth)
+            if y2 is not None and m2 is not None and d2 is not None:
+                entry["numbers"] = num.compute_all(last, first, y2, m2, d2)
+            cleaned_others.append(entry)
+        result["others"] = cleaned_others[:max_others]
+        if result["others"]:
+            result["relationship"] = _strip_markdown(
+                pg.generate_relationship_analysis(
+                    name_display, birth_date, numbers, result["others"]
+                )
+            )
+    return result
+
+
+def _result_pdf_bytes(result: dict, artwork_bytes: bytes | None) -> bytes:
+    full_content = result["profile"]
+    if result.get("relationship"):
+        full_content += "\n\n[[PAGEBREAK]]\n\n" + result["relationship"]
+    return pdfgen.build_pdf(
+        full_content,
+        title=f"マカレン数秘術 プロファイル — {result['name']}",
+        numbers=result.get("numbers") or {},
+        nine_year_cycle=result.get("nine_year_cycle") or [],
+        artwork_bytes=artwork_bytes,
+    )
+
+
+def _record_workflow_event(store, workflow_id: str, event_type: str, payload: dict | None = None) -> None:
+    try:
+        store.insert(
+            "makaren_workflow_events",
+            {"workflow_id": workflow_id, "event_type": event_type, "payload": payload or {}},
+        )
+    except Exception:
+        logger.exception("[workflow] event recording failed workflow_id=%s event=%s", workflow_id, event_type)
+
+
 def _run_generate_job(
     last_name: str,
     first_name: str,
@@ -533,104 +713,12 @@ def _run_generate_job(
     referred_by_code: str,
     others: list,
 ) -> None:
-    """プロファイル生成〜PDF作成・メール送信までをバックグラウンドで実行するジョブ。"""
-    logger.info(
-        "[generate_job] 開始 last_name=%s first_name=%s email=%s product=%s",
-        last_name,
-        first_name,
-        email_to,
-        product,
-    )
+    """Legacy direct-delivery job, kept as a safe fallback until Supabase is configured."""
+    logger.info("[generate_job] legacy start email=%s product=%s", email_to, product)
     try:
-        import numerology as num
-
-        y, m, d = _parse_birth_date(birth_date)
-        if y is None or m is None or d is None:
-            return
-
-        numbers = num.compute_all(last_name, first_name, y, m, d)
-        nine_year_cycle = num.compute_nine_year_cycle(y, m, d)
-        numbers_maiden = None
-        if maiden_last_name and maiden_last_name != last_name:
-            numbers_maiden = num.compute_all(maiden_last_name, first_name, y, m, d)
-        name_display = f"{last_name} {first_name}"
-
-        # LLM に渡す相談内容。未入力の場合は、構成数から重要そうなテーマを選んで扱うよう指示する。
-        if consultation:
-            consultation_for_llm = consultation
-        else:
-            consultation_for_llm = (
-                "本人から具体的な相談内容はないため、あなたが構成数の傾向から見て特に重要だと考えるテーマ"
-                "（キャリア・人間関係・自己表現・お金・パートナーシップなどの中から1つ）を選び、"
-                "そのテーマへのガイダンスも併せて含めてください。"
-            )
-
-        profile_text = pg.generate_profile(
-            last_name,
-            first_name,
-            birth_date,
-            consultation_for_llm,
-            numbers,
-            nine_year_cycle,
-            maiden_last_name=maiden_last_name or None,
-            numbers_maiden=numbers_maiden,
+        result = _generate_analysis(
+            last_name, first_name, maiden_last_name, birth_date, consultation, product, others
         )
-        profile_text = _strip_markdown(profile_text)
-
-        result: dict = {
-            "ok": True,
-            "profile": profile_text,
-            "product": product,
-            "numbers": numbers,
-            "nine_year_cycle": nine_year_cycle,
-            "name": name_display,
-        }
-        others_for_record: list[dict] = []
-
-        max_others = 0
-        if product == "relationship_3":
-            max_others = 3
-        elif product == "relationship_5":
-            max_others = 5
-        elif product == "relationship_10":
-            max_others = 10
-        if max_others and others:
-            cleaned_others = []
-            for o in others:
-                last = _normalize_name(o.get("last_name") or "")
-                first = _normalize_name(o.get("first_name") or "")
-                if not last and not first:
-                    continue
-                bd = _normalize_birth_date(o.get("birth_date") or "")
-                entry = {
-                    "last_name": last,
-                    "first_name": first,
-                    "birth_date": bd,
-                    "name_display": f"{last} {first}".strip() or "（名前未入力）",
-                }
-                y2, m2, d2 = _parse_birth_date(bd)
-                if y2 is not None and m2 is not None and d2 is not None:
-                    entry["numbers"] = num.compute_all(last, first, y2, m2, d2)
-                else:
-                    entry["numbers"] = {}
-                cleaned_others.append(entry)
-            others = cleaned_others[:max_others]
-            others_for_record = [
-                {"name_display": o.get("name_display") or "", "birth_date": o.get("birth_date") or ""}
-                for o in others
-            ]
-            if others:
-                relation_text = pg.generate_relationship_analysis(
-                    name_display, birth_date, numbers, others
-                )
-                relation_text = _strip_markdown(relation_text)
-                result["relationship"] = relation_text
-            else:
-                result["relationship"] = None
-        else:
-            result["relationship"] = None
-
-        # 紹介コード発行（メール送信時のみ履歴に残す）
         referral_code_issued = ""
         referred_by = (
             referred_by_code
@@ -646,18 +734,18 @@ def _run_generate_job(
                 if referrer_email and referrer_email != email_to and _is_ambassador(referrer_email):
                     _append_ambassador_earning(referrer_email, email_to, order_amount)
             sent_ok, sent_err = _send_profile_email(
-                profile=profile_text,
+                profile=result["profile"],
                 relationship=result.get("relationship") or "",
-                name=name_display,
+                name=result["name"],
                 email_to=email_to,
                 product=product,
                 birth_date=birth_date,
                 consultation=consultation,
-                numbers=numbers,
-                nine_year_cycle=nine_year_cycle,
+                numbers=result["numbers"],
+                nine_year_cycle=result["nine_year_cycle"],
                 referral_code_issued=referral_code_issued,
                 referred_by=referred_by,
-                others_list=others_for_record,
+                others_list=result["others"],
             )
             if sent_ok:
                 logger.info(
@@ -674,9 +762,6 @@ def _run_generate_job(
                     sent_err or "",
                 )
     except Exception:
-        import traceback
-
-        traceback.print_exc()
         logger.exception(
             "[generate_job] 予期しないエラー last_name=%s first_name=%s email=%s product=%s",
             last_name,
@@ -684,6 +769,127 @@ def _run_generate_job(
             email_to,
             product,
         )
+
+
+def _run_workflow_generate_job(
+    last_name: str,
+    first_name: str,
+    maiden_last_name: str,
+    birth_date: str,
+    consultation: str,
+    email_to: str,
+    product: str,
+    referred_by_code: str,
+    others: list,
+    public_base_url: str,
+) -> None:
+    """Generate version 1, store it privately, then email the review link."""
+    store = get_workflow_store()
+    review_token = generate_review_token()
+    referral_code_issued = _generate_referral_code()
+    referred_by = (
+        referred_by_code
+        if referred_by_code and len(referred_by_code) == 7 and referred_by_code.isdigit()
+        else None
+    )
+    workflow = store.insert(
+        "makaren_workflows",
+        {
+            "customer_name": f"{last_name} {first_name}",
+            "email": email_to,
+            "birth_date": birth_date,
+            "product": product,
+            "consultation": consultation or None,
+            "review_token_hash": hash_review_token(review_token),
+            "referral_code_used": referred_by,
+            "referral_code_issued": referral_code_issued,
+            "status": "generating",
+        },
+    )
+    workflow_id = workflow["id"]
+    _record_workflow_event(store, workflow_id, "generation_started")
+    try:
+        result = _generate_analysis(
+            last_name, first_name, maiden_last_name, birth_date, consultation, product, others
+        )
+        numbers_full = {
+            "numbers": result["numbers"],
+            "numbers_maiden": result.get("numbers_maiden"),
+            "nine_year_cycle": result["nine_year_cycle"],
+        }
+        reading = store.insert(
+            "makaren_readings",
+            {
+                "name": result["name"],
+                "birth_date": birth_date,
+                "email": email_to,
+                "product": product,
+                "numbers_full": numbers_full,
+                "referral_code_used": referred_by,
+                "others": result["others"],
+            },
+        )
+        store.update(
+            "makaren_workflows",
+            {
+                "reading_id": reading["id"],
+                "numbers_full": numbers_full,
+                "others": result["others"],
+            },
+            filters={"id": f"eq.{workflow_id}"},
+        )
+        art_bytes, art_prompt, art_mime, image_model = generate_artwork(
+            result["profile"], result["numbers"]
+        )
+        pdf_bytes = _result_pdf_bytes(result, art_bytes)
+        art_path = f"workflows/{workflow_id}/v1/art.png"
+        pdf_path = f"workflows/{workflow_id}/v1/report.pdf"
+        store.upload(art_path, art_bytes, art_mime)
+        store.upload(pdf_path, pdf_bytes, "application/pdf")
+        version = store.insert(
+            "makaren_workflow_versions",
+            {
+                "workflow_id": workflow_id,
+                "version_no": 1,
+                "profile_text": result["profile"],
+                "relationship_text": result.get("relationship"),
+                "art_prompt": art_prompt,
+                "art_storage_path": art_path,
+                "art_mime_type": art_mime,
+                "pdf_storage_path": pdf_path,
+                "text_model": os.getenv("OPENAI_TEXT_MODEL", "gpt-4o"),
+                "image_model": image_model,
+                "change_summary": "初回生成",
+                "status": "ready",
+            },
+        )
+        store.update(
+            "makaren_workflows",
+            {"status": "awaiting_review", "current_version": 1, "last_error": None},
+            filters={"id": f"eq.{workflow_id}", "status": "eq.generating"},
+        )
+        _record_workflow_event(
+            store, workflow_id, "version_ready", {"version_no": 1, "version_id": version["id"]}
+        )
+        review_url = f"{public_base_url.rstrip('/')}/review/{review_token}"
+        sent_ok, sent_error = _send_review_email(email_to, result["name"], review_url)
+        if not sent_ok:
+            store.update(
+                "makaren_workflows",
+                {"last_error": sent_error},
+                filters={"id": f"eq.{workflow_id}"},
+            )
+            _record_workflow_event(store, workflow_id, "review_email_failed")
+        else:
+            _record_workflow_event(store, workflow_id, "review_email_sent")
+    except Exception as exc:
+        logger.exception("[workflow] initial generation failed workflow_id=%s", workflow_id)
+        store.update(
+            "makaren_workflows",
+            {"status": "failed", "last_error": str(exc)[:1000]},
+            filters={"id": f"eq.{workflow_id}"},
+        )
+        _record_workflow_event(store, workflow_id, "generation_failed")
 
 
 @app.route("/api/generate", methods=["POST"])
@@ -712,6 +918,10 @@ def generate():
         return jsonify({"ok": False, "error": "姓・名（ローマ字）は必須です"}), 400
     if not birth_date:
         return jsonify({"ok": False, "error": "生年月日は必須です"}), 400
+    if not _is_valid_email(email_to):
+        return jsonify({"ok": False, "error": "メールアドレスの形式が正しくありません"}), 400
+    if product not in {"profile_only", "relationship_3", "relationship_5", "relationship_10"}:
+        return jsonify({"ok": False, "error": "プランが正しくありません"}), 400
 
     y, m, d = _parse_birth_date(birth_date)
     if y is None or m is None or d is None:
@@ -727,20 +937,37 @@ def generate():
     if smtp_error:
         return jsonify({"ok": False, "error": smtp_error}), 500
 
-    # バックグラウンドでプロファイル生成〜メール送信まで実行
+    has_any_workflow_setting = bool(
+        os.getenv("SUPABASE_URL", "").strip()
+        or os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    )
+    if has_any_workflow_setting and not workflow_enabled():
+        return jsonify({"ok": False, "error": workflow_config_error()}), 500
+
+    # Supabase設定済みならレビュー・版管理フロー、未設定なら従来の直接納品を使う。
+    target = _run_generate_job
+    job_args = (
+        last_name,
+        first_name,
+        maiden_last_name,
+        birth_date,
+        consultation,
+        email_to,
+        product,
+        referred_by_code,
+        others,
+    )
+    if workflow_enabled():
+        public_base_url = (
+            os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
+            or request.url_root.rstrip("/")
+        )
+        target = _run_workflow_generate_job
+        job_args = job_args + (public_base_url,)
+
     Thread(
-        target=_run_generate_job,
-        args=(
-            last_name,
-            first_name,
-            maiden_last_name,
-            birth_date,
-            consultation,
-            email_to,
-            product,
-            referred_by_code,
-            others,
-        ),
+        target=target,
+        args=job_args,
         daemon=True,
     ).start()
 
@@ -813,6 +1040,626 @@ def send_email():
             status = 500
         return jsonify({"ok": False, "error": sent_error or "メール送信に失敗しました"}), status
     return jsonify({"ok": True})
+
+
+def _parse_iso_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+
+
+def _load_review_state(token: str):
+    store = get_workflow_store()
+    workflow = store.select_one(
+        "makaren_workflows",
+        filters={"review_token_hash": f"eq.{hash_review_token(token)}"},
+    )
+    if not workflow:
+        return store, None, None, None
+    version = None
+    if int(workflow.get("current_version") or 0) > 0:
+        version = store.select_one(
+            "makaren_workflow_versions",
+            filters={
+                "workflow_id": f"eq.{workflow['id']}",
+                "version_no": f"eq.{workflow['current_version']}",
+            },
+        )
+    delivery = store.select_one(
+        "makaren_deliveries",
+        filters={"workflow_id": f"eq.{workflow['id']}"},
+    )
+    return store, workflow, version, delivery
+
+
+def _workflow_expired(workflow: dict) -> bool:
+    expires_at = _parse_iso_datetime(workflow.get("expires_at"))
+    return bool(expires_at and expires_at <= datetime.now(timezone.utc))
+
+
+def _revision_context(workflow: dict) -> tuple[dict, list, str]:
+    numbers_full = workflow.get("numbers_full") or {}
+    numbers = numbers_full.get("numbers") if isinstance(numbers_full, dict) else {}
+    nine_year_cycle = (
+        numbers_full.get("nine_year_cycle") if isinstance(numbers_full, dict) else []
+    )
+    context = json.dumps(
+        {
+            "name": workflow.get("customer_name"),
+            "birth_date": workflow.get("birth_date"),
+            "consultation": workflow.get("consultation"),
+            "numbers": numbers or {},
+            "others": workflow.get("others") or [],
+        },
+        ensure_ascii=False,
+    )
+    return numbers or {}, nine_year_cycle or [], context
+
+
+def _run_revision_job(
+    workflow_id: str,
+    feedback_id: str,
+    review_url: str,
+) -> None:
+    store = get_workflow_store()
+    try:
+        workflow = store.select_one(
+            "makaren_workflows", filters={"id": f"eq.{workflow_id}"}
+        )
+        feedback = store.select_one(
+            "makaren_feedback", filters={"id": f"eq.{feedback_id}"}
+        )
+        if not workflow or not feedback:
+            raise RuntimeError("ワークフローまたは修正依頼が見つかりません")
+        base_no = int(feedback["base_version_no"])
+        if int(workflow.get("current_version") or 0) != base_no:
+            store.update(
+                "makaren_feedback",
+                {"status": "cancelled", "error_message": "新しい版が既に存在します"},
+                filters={"id": f"eq.{feedback_id}"},
+            )
+            return
+        locked = store.update(
+            "makaren_workflows",
+            {"status": "regenerating", "last_error": None},
+            filters={
+                "id": f"eq.{workflow_id}",
+                "status": "eq.revision_requested",
+                "current_version": f"eq.{base_no}",
+            },
+        )
+        if not locked:
+            raise RuntimeError("修正処理を開始できませんでした")
+        store.update(
+            "makaren_feedback",
+            {"status": "processing"},
+            filters={"id": f"eq.{feedback_id}", "status": "eq.queued"},
+        )
+        base_version = store.select_one(
+            "makaren_workflow_versions",
+            filters={
+                "workflow_id": f"eq.{workflow_id}",
+                "version_no": f"eq.{base_no}",
+            },
+        )
+        if not base_version:
+            raise RuntimeError("修正元の版が見つかりません")
+
+        target = feedback["target"]
+        instruction = feedback["instruction"]
+        numbers, nine_year_cycle, context = _revision_context(workflow)
+        profile_text = base_version["profile_text"]
+        relationship_text = base_version.get("relationship_text")
+        if target in {"profile", "all"}:
+            profile_text = _strip_markdown(
+                pg.revise_generated_text(
+                    profile_text,
+                    instruction,
+                    target_label="本人用プロファイル",
+                    context=context,
+                )
+            )
+        if target in {"relationship", "all"} and relationship_text:
+            relationship_text = _strip_markdown(
+                pg.revise_generated_text(
+                    relationship_text,
+                    instruction,
+                    target_label="関係性分析",
+                    context=context,
+                )
+            )
+
+        regenerate_art = target in {"profile", "art", "all"}
+        if regenerate_art:
+            art_bytes, art_prompt, art_mime, image_model = generate_artwork(
+                profile_text,
+                numbers,
+                previous_prompt=base_version.get("art_prompt"),
+                revision_instruction=instruction,
+            )
+        else:
+            art_prompt = base_version.get("art_prompt")
+            art_mime = base_version.get("art_mime_type") or "image/png"
+            image_model = base_version.get("image_model")
+            art_bytes = store.download(base_version["art_storage_path"])
+
+        new_no = base_no + 1
+        result = {
+            "profile": profile_text,
+            "relationship": relationship_text,
+            "name": workflow["customer_name"],
+            "numbers": numbers,
+            "nine_year_cycle": nine_year_cycle,
+        }
+        pdf_bytes = _result_pdf_bytes(result, art_bytes)
+        art_path = base_version.get("art_storage_path")
+        if regenerate_art:
+            art_path = f"workflows/{workflow_id}/v{new_no}/art.png"
+            store.upload(art_path, art_bytes, art_mime)
+        pdf_path = f"workflows/{workflow_id}/v{new_no}/report.pdf"
+        store.upload(pdf_path, pdf_bytes, "application/pdf")
+        version = store.insert(
+            "makaren_workflow_versions",
+            {
+                "workflow_id": workflow_id,
+                "version_no": new_no,
+                "parent_version_id": base_version["id"],
+                "source_feedback_id": feedback_id,
+                "profile_text": profile_text,
+                "relationship_text": relationship_text,
+                "art_prompt": art_prompt,
+                "art_storage_path": art_path,
+                "art_mime_type": art_mime,
+                "pdf_storage_path": pdf_path,
+                "text_model": os.getenv("OPENAI_TEXT_MODEL", "gpt-4o"),
+                "image_model": image_model,
+                "change_summary": instruction[:1000],
+                "status": "ready",
+            },
+        )
+        advanced = store.update(
+            "makaren_workflows",
+            {
+                "status": "awaiting_review",
+                "current_version": new_no,
+                "revision_count": int(workflow.get("revision_count") or 0) + 1,
+                "last_error": None,
+            },
+            filters={
+                "id": f"eq.{workflow_id}",
+                "status": "eq.regenerating",
+                "current_version": f"eq.{base_no}",
+            },
+        )
+        if not advanced:
+            raise RuntimeError("新しい版を現在版に切り替えられませんでした")
+        store.update(
+            "makaren_workflow_versions",
+            {"status": "superseded"},
+            filters={"id": f"eq.{base_version['id']}", "status": "eq.ready"},
+        )
+        store.update(
+            "makaren_feedback",
+            {
+                "status": "completed",
+                "processed_at": datetime.now(timezone.utc).isoformat(),
+                "error_message": None,
+            },
+            filters={"id": f"eq.{feedback_id}"},
+        )
+        _record_workflow_event(
+            store,
+            workflow_id,
+            "revision_ready",
+            {"version_no": new_no, "version_id": version["id"], "target": target},
+        )
+        sent, error = _send_review_email(
+            workflow["email"], workflow["customer_name"], review_url, revised=True
+        )
+        if not sent:
+            store.update(
+                "makaren_workflows",
+                {"last_error": error},
+                filters={"id": f"eq.{workflow_id}"},
+            )
+    except Exception as exc:
+        logger.exception("[workflow] revision failed workflow_id=%s", workflow_id)
+        try:
+            store.update(
+                "makaren_feedback",
+                {
+                    "status": "failed",
+                    "error_message": str(exc)[:1000],
+                    "processed_at": datetime.now(timezone.utc).isoformat(),
+                },
+                filters={"id": f"eq.{feedback_id}"},
+            )
+            store.update(
+                "makaren_workflows",
+                {"status": "awaiting_review", "last_error": str(exc)[:1000]},
+                filters={"id": f"eq.{workflow_id}", "status": "eq.regenerating"},
+            )
+            _record_workflow_event(store, workflow_id, "revision_failed")
+        except Exception:
+            logger.exception("[workflow] failed to persist revision error workflow_id=%s", workflow_id)
+
+
+def _deliver_approved_workflow(workflow_id: str) -> None:
+    store = get_workflow_store()
+    try:
+        workflow = store.select_one(
+            "makaren_workflows", filters={"id": f"eq.{workflow_id}"}
+        )
+        if not workflow or workflow.get("status") != "approved":
+            return
+        claimed = store.update(
+            "makaren_workflows",
+            {"status": "finalizing", "last_error": None},
+            filters={"id": f"eq.{workflow_id}", "status": "eq.approved"},
+        )
+        if not claimed:
+            return
+        delivery = store.select_one(
+            "makaren_deliveries", filters={"workflow_id": f"eq.{workflow_id}"}
+        )
+        if not delivery:
+            raise RuntimeError("納品レコードが見つかりません")
+        if delivery.get("fulfillment_type") == "digital" and delivery.get("status") == "delivered":
+            store.update(
+                "makaren_workflows",
+                {
+                    "status": "delivered",
+                    "delivered_at": datetime.now(timezone.utc).isoformat(),
+                    "last_error": None,
+                },
+                filters={"id": f"eq.{workflow_id}", "status": "eq.finalizing"},
+            )
+            return
+        version = store.select_one(
+            "makaren_workflow_versions",
+            filters={
+                "workflow_id": f"eq.{workflow_id}",
+                "version_no": f"eq.{workflow['current_version']}",
+            },
+        )
+        if not version or not version.get("pdf_storage_path"):
+            raise RuntimeError("承認版PDFが見つかりません")
+        pdf_bytes = store.download(version["pdf_storage_path"])
+        numbers_full = workflow.get("numbers_full") or {}
+        numbers = numbers_full.get("numbers") if isinstance(numbers_full, dict) else {}
+        cycle = numbers_full.get("nine_year_cycle") if isinstance(numbers_full, dict) else []
+        referred_by = workflow.get("referral_code_used")
+        sent, error = _send_profile_email(
+            profile=version["profile_text"],
+            relationship=version.get("relationship_text") or "",
+            name=workflow["customer_name"],
+            email_to=workflow["email"],
+            product=workflow["product"],
+            birth_date=workflow.get("birth_date") or "",
+            consultation=workflow.get("consultation") or "",
+            numbers=numbers or {},
+            nine_year_cycle=cycle or [],
+            referral_code_issued=workflow.get("referral_code_issued"),
+            referred_by=referred_by,
+            others_list=workflow.get("others") or [],
+            pdf_bytes_override=pdf_bytes,
+        )
+        if not sent:
+            raise RuntimeError(error or "最終メールを送信できませんでした")
+        now = datetime.now(timezone.utc).isoformat()
+        delivered = store.update(
+            "makaren_workflows",
+            {"status": "delivered", "delivered_at": now, "last_error": None},
+            filters={"id": f"eq.{workflow_id}", "status": "eq.finalizing"},
+        )
+        if not delivered:
+            raise RuntimeError("納品状態を確定できませんでした")
+        if delivery and delivery.get("fulfillment_type") == "digital":
+            store.update(
+                "makaren_deliveries",
+                {"status": "delivered", "last_error": None},
+                filters={"id": f"eq.{delivery['id']}"},
+            )
+        if referred_by:
+            try:
+                referrer_email = _referrer_email_by_code(referred_by)
+                if (
+                    referrer_email
+                    and referrer_email != workflow["email"]
+                    and _is_ambassador(referrer_email)
+                ):
+                    _append_ambassador_earning(
+                        referrer_email, workflow["email"], _order_amount(workflow["product"])
+                    )
+            except Exception:
+                logger.exception("[workflow] referral bookkeeping failed workflow_id=%s", workflow_id)
+        _record_workflow_event(store, workflow_id, "digital_delivery_sent")
+    except Exception as exc:
+        logger.exception("[workflow] delivery failed workflow_id=%s", workflow_id)
+        store.update(
+            "makaren_workflows",
+            {"status": "approved", "last_error": str(exc)[:1000]},
+            filters={"id": f"eq.{workflow_id}", "status": "eq.finalizing"},
+        )
+        delivery = store.select_one(
+            "makaren_deliveries", filters={"workflow_id": f"eq.{workflow_id}"}
+        )
+        if delivery and delivery.get("fulfillment_type") == "digital" and delivery.get("status") != "delivered":
+            store.update(
+                "makaren_deliveries",
+                {"status": "failed", "last_error": str(exc)[:1000]},
+                filters={"id": f"eq.{delivery['id']}"},
+            )
+        _record_workflow_event(store, workflow_id, "digital_delivery_failed")
+
+
+@app.route("/review/<token>", methods=["GET"])
+def review_workflow(token: str):
+    if not workflow_enabled():
+        return "Review workflow is not configured", 503
+    try:
+        store, workflow, version, delivery = _load_review_state(token)
+        if not workflow:
+            return "確認ページが見つかりません", 404
+        if _workflow_expired(workflow):
+            return "確認ページの有効期限が切れています", 410
+        art_url = None
+        pdf_url = None
+        if version and version.get("art_storage_path"):
+            art_url = store.signed_url(version["art_storage_path"], 600)
+        if version and version.get("pdf_storage_path"):
+            pdf_url = store.signed_url(version["pdf_storage_path"], 600)
+        response = make_response(
+            render_template(
+                "review.html",
+                token=token,
+                workflow=workflow,
+                version=version,
+                delivery=delivery,
+                art_url=art_url,
+                pdf_url=pdf_url,
+            )
+        )
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; img-src 'self' https://*.supabase.co data:; "
+            "style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; "
+            "form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+        )
+        return response
+    except WorkflowStoreError:
+        logger.exception("[workflow] review page failed")
+        return "確認ページを読み込めませんでした", 503
+
+
+@app.route("/api/review/<token>/feedback", methods=["POST"])
+def submit_workflow_feedback(token: str):
+    if not workflow_enabled():
+        return jsonify({"ok": False, "error": "レビュー機能が未設定です"}), 503
+    data = request.get_json() or {}
+    target = _normalize_text(data.get("target") or "all")
+    instruction = _normalize_text(data.get("instruction"))
+    try:
+        base_version = int(data.get("base_version"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "版番号が正しくありません"}), 400
+    if target not in {"profile", "relationship", "art", "all"}:
+        return jsonify({"ok": False, "error": "修正対象が正しくありません"}), 400
+    if not instruction or len(instruction) > 4000:
+        return jsonify({"ok": False, "error": "修正内容は1〜4000文字で入力してください"}), 400
+    try:
+        store, workflow, version, _ = _load_review_state(token)
+        if not workflow or not version:
+            return jsonify({"ok": False, "error": "確認対象が見つかりません"}), 404
+        if _workflow_expired(workflow):
+            return jsonify({"ok": False, "error": "確認期限が切れています"}), 410
+        if workflow.get("status") != "awaiting_review":
+            return jsonify({"ok": False, "error": "現在は修正を受け付けられません"}), 409
+        if int(workflow.get("revision_count") or 0) >= int(workflow.get("max_revisions") or 0):
+            return jsonify({"ok": False, "error": "修正回数の上限に達しました"}), 409
+        if base_version != int(workflow.get("current_version") or 0):
+            return jsonify({"ok": False, "error": "新しい版があるため、ページを再読み込みしてください"}), 409
+        if target == "relationship" and not version.get("relationship_text"):
+            return jsonify({"ok": False, "error": "関係性分析がないプランです"}), 400
+        reserved = store.update(
+            "makaren_workflows",
+            {"status": "revision_requested", "last_error": None},
+            filters={
+                "id": f"eq.{workflow['id']}",
+                "status": "eq.awaiting_review",
+                "current_version": f"eq.{base_version}",
+            },
+        )
+        if not reserved:
+            return jsonify({"ok": False, "error": "別の処理が進行中です"}), 409
+        try:
+            feedback = store.insert(
+                "makaren_feedback",
+                {
+                    "workflow_id": workflow["id"],
+                    "base_version_no": base_version,
+                    "target": target,
+                    "instruction": instruction,
+                    "status": "queued",
+                },
+            )
+        except Exception:
+            store.update(
+                "makaren_workflows",
+                {"status": "awaiting_review"},
+                filters={"id": f"eq.{workflow['id']}", "status": "eq.revision_requested"},
+            )
+            raise
+        public_base_url = (
+            os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
+            or request.url_root.rstrip("/")
+        )
+        review_url = f"{public_base_url}/review/{token}"
+        Thread(
+            target=_run_revision_job,
+            args=(workflow["id"], feedback["id"], review_url),
+            daemon=True,
+        ).start()
+        _record_workflow_event(
+            store, workflow["id"], "revision_requested", {"target": target, "base_version": base_version}
+        )
+        return jsonify({"ok": True, "message": "修正を受け付けました"}), 202
+    except WorkflowStoreError:
+        logger.exception("[workflow] feedback submission failed")
+        return jsonify({"ok": False, "error": "修正依頼を保存できませんでした"}), 503
+
+
+@app.route("/api/review/<token>/approve", methods=["POST"])
+def approve_workflow(token: str):
+    if not workflow_enabled():
+        return jsonify({"ok": False, "error": "レビュー機能が未設定です"}), 503
+    data = request.get_json() or {}
+    try:
+        version_no = int(data.get("version"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "版番号が正しくありません"}), 400
+    try:
+        store, workflow, version, delivery = _load_review_state(token)
+        if not workflow or not version:
+            return jsonify({"ok": False, "error": "確認対象が見つかりません"}), 404
+        if _workflow_expired(workflow):
+            return jsonify({"ok": False, "error": "確認期限が切れています"}), 410
+        if workflow.get("status") == "delivered":
+            return jsonify({"ok": True, "message": "すでに承認・納品済みです"})
+        if workflow.get("status") == "finalizing":
+            return jsonify({"ok": True, "message": "承認済みです。最終PDFを送信しています"})
+        if workflow.get("status") == "approved":
+            if not delivery:
+                delivery = store.insert(
+                    "makaren_deliveries",
+                    {
+                        "workflow_id": workflow["id"],
+                        "version_id": version["id"],
+                        "fulfillment_type": "digital",
+                        "status": "data_ready",
+                    },
+                )
+            elif delivery.get("fulfillment_type") == "digital" and delivery.get("status") == "failed":
+                store.update(
+                    "makaren_deliveries",
+                    {"status": "data_ready", "last_error": None},
+                    filters={"id": f"eq.{delivery['id']}"},
+                )
+            Thread(target=_deliver_approved_workflow, args=(workflow["id"],), daemon=True).start()
+            return jsonify({"ok": True, "message": "承認済みです。最終PDFの送信を再開しました"})
+        if workflow.get("status") != "awaiting_review" or version_no != int(workflow["current_version"]):
+            return jsonify({"ok": False, "error": "現在の版を承認できません"}), 409
+        now = datetime.now(timezone.utc).isoformat()
+        approved = store.update(
+            "makaren_workflows",
+            {"status": "approved", "approved_at": now, "last_error": None},
+            filters={
+                "id": f"eq.{workflow['id']}",
+                "status": "eq.awaiting_review",
+                "current_version": f"eq.{version_no}",
+            },
+        )
+        if not approved:
+            return jsonify({"ok": False, "error": "別の処理が進行中です"}), 409
+        store.update(
+            "makaren_workflow_versions",
+            {"status": "approved"},
+            filters={"id": f"eq.{version['id']}"},
+        )
+        try:
+            if delivery:
+                store.update(
+                    "makaren_deliveries",
+                    {"version_id": version["id"], "status": "data_ready", "last_error": None},
+                    filters={"id": f"eq.{delivery['id']}"},
+                )
+            else:
+                store.insert(
+                    "makaren_deliveries",
+                    {
+                        "workflow_id": workflow["id"],
+                        "version_id": version["id"],
+                        "fulfillment_type": "digital",
+                        "status": "data_ready",
+                    },
+                )
+        except Exception:
+            store.update(
+                "makaren_workflows",
+                {"status": "awaiting_review", "approved_at": None},
+                filters={"id": f"eq.{workflow['id']}", "status": "eq.approved"},
+            )
+            store.update(
+                "makaren_workflow_versions",
+                {"status": "ready"},
+                filters={"id": f"eq.{version['id']}", "status": "eq.approved"},
+            )
+            raise
+        _record_workflow_event(store, workflow["id"], "approved", {"version_no": version_no})
+        Thread(target=_deliver_approved_workflow, args=(workflow["id"],), daemon=True).start()
+        return jsonify({"ok": True, "message": "承認しました。最終PDFをメールでお送りします"})
+    except WorkflowStoreError:
+        logger.exception("[workflow] approval failed")
+        return jsonify({"ok": False, "error": "承認を保存できませんでした"}), 503
+
+
+@app.route("/api/review/<token>/framing", methods=["POST"])
+def request_framing(token: str):
+    if not workflow_enabled():
+        return jsonify({"ok": False, "error": "レビュー機能が未設定です"}), 503
+    data = request.get_json() or {}
+    try:
+        store, workflow, version, delivery = _load_review_state(token)
+        if not workflow or not version:
+            return jsonify({"ok": False, "error": "確認対象が見つかりません"}), 404
+        if workflow.get("status") != "delivered":
+            return jsonify({"ok": False, "error": "最終PDFの納品後にお申し込みください"}), 409
+        print_spec = {
+            "size": _normalize_text(data.get("size"))[:100],
+            "paper": _normalize_text(data.get("paper"))[:100],
+            "notes": _normalize_text(data.get("print_notes"))[:1000],
+        }
+        frame_spec = {
+            "style": _normalize_text(data.get("frame_style"))[:100],
+            "color": _normalize_text(data.get("frame_color"))[:100],
+            "notes": _normalize_text(data.get("frame_notes"))[:1000],
+        }
+        shipping_address = {
+            "name": _normalize_text(data.get("shipping_name"))[:200],
+            "postal_code": _normalize_text(data.get("postal_code"))[:20],
+            "address": _normalize_text(data.get("address"))[:500],
+            "phone": _normalize_text(data.get("phone"))[:40],
+        }
+        if not print_spec["size"] or not frame_spec["style"]:
+            return jsonify({"ok": False, "error": "希望サイズと額装スタイルを入力してください"}), 400
+        values = {
+            "version_id": version["id"],
+            "fulfillment_type": "framed_print",
+            "print_spec": print_spec,
+            "frame_spec": frame_spec,
+            "shipping_address": shipping_address,
+            "status": "pending",
+            "last_error": None,
+        }
+        if delivery:
+            store.update(
+                "makaren_deliveries", values, filters={"id": f"eq.{delivery['id']}"}
+            )
+        else:
+            store.insert(
+                "makaren_deliveries", {"workflow_id": workflow["id"], **values}
+            )
+        _record_workflow_event(store, workflow["id"], "framing_requested")
+        return jsonify({"ok": True, "message": "額装のご希望を受け付けました"})
+    except WorkflowStoreError:
+        logger.exception("[workflow] framing request failed")
+        return jsonify({"ok": False, "error": "額装申込を保存できませんでした"}), 503
 
 
 @app.route("/api/submissions", methods=["GET"])
@@ -897,12 +1744,44 @@ def admin():
                 row["sent_at_ja"] = sent
         else:
             row["sent_at_ja"] = "—"
+    workflows = []
+    workflow_error = None
+    if workflow_enabled():
+        try:
+            workflows = get_workflow_store().select(
+                "makaren_workflows", order="created_at.desc", limit=100
+            )
+            status_labels = {
+                "generating": "初回生成中",
+                "awaiting_review": "確認待ち",
+                "revision_requested": "修正受付",
+                "regenerating": "再生成中",
+                "approved": "承認・送信中",
+                "finalizing": "最終PDF送信中",
+                "delivered": "納品済み",
+                "failed": "失敗",
+                "cancelled": "取消",
+            }
+            for workflow in workflows:
+                workflow["status_label"] = status_labels.get(
+                    workflow.get("status"), workflow.get("status") or "—"
+                )
+                created = workflow.get("created_at") or ""
+                parsed = _parse_iso_datetime(created)
+                workflow["created_at_ja"] = (
+                    parsed.strftime("%Y年%m月%d日 %H:%M") if parsed else created
+                )
+        except Exception as exc:
+            logger.exception("[admin] workflow list failed")
+            workflow_error = str(exc)
     return render_template(
         "admin.html",
         ambassadors=ambassadors_list,
         total_referrals=total_referrals,
         total_sales=total_sales,
         submissions=submissions,
+        workflows=workflows,
+        workflow_error=workflow_error,
         admin_key=request.args.get("key", ""),
     )
 
