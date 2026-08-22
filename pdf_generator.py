@@ -136,6 +136,7 @@ def build_pdf(
     title: str = "マカレン数秘術 プロファイル",
     numbers: dict | None = None,
     nine_year_cycle: list[dict] | None = None,
+    artwork_bytes: bytes | None = None,
 ) -> bytes:
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -181,7 +182,24 @@ def build_pdf(
     available_width = max(100, page_width - margin_h * 2)
     available_height = max(100, page_height - margin_v * 2)
 
-    story = [Paragraph(title, styles["Title"]), Spacer(1, 12)]
+    story = []
+    if artwork_bytes:
+        story.append(Paragraph("MAKAREN PERSONAL ART", styles["Title"]))
+        story.append(Spacer(1, 8))
+        try:
+            story.append(
+                Image(
+                    io.BytesIO(artwork_bytes),
+                    width=available_width,
+                    height=available_height * 0.82,
+                    kind="proportional",
+                )
+            )
+            story.append(PageBreak())
+        except Exception:
+            # 画像が壊れていても鑑定書PDF自体は生成する。
+            story = []
+    story.extend([Paragraph(title, styles["Title"]), Spacer(1, 12)])
 
     core_value = None
     if numbers and "核数" in numbers:
