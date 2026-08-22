@@ -27,11 +27,12 @@ def _create_chat_completion(client: OpenAI, system: str, user: str):
     """
     timeout_sec = float(os.getenv("OPENAI_TIMEOUT_SECONDS", "120"))
     retry_count = max(1, int(os.getenv("OPENAI_RETRY_COUNT", "3")))
+    model = os.getenv("OPENAI_TEXT_MODEL", "gpt-4o").strip() or "gpt-4o"
 
     for attempt in range(1, retry_count + 1):
         try:
             return client.chat.completions.create(
-                model="gpt-4o",
+                model=model,
                 max_tokens=8192,
                 timeout=timeout_sec,
                 messages=[
@@ -51,6 +52,45 @@ def _create_chat_completion(client: OpenAI, system: str, user: str):
             ) from e
         except APIError as e:
             raise RuntimeError(f"OpenAI APIエラー: {e}") from e
+
+
+def revise_generated_text(
+    existing_text: str,
+    instruction: str,
+    *,
+    target_label: str,
+    context: str = "",
+) -> str:
+    """Revise one generated document while preserving unaffected content."""
+    if not (existing_text or "").strip():
+        raise ValueError(f"修正対象の{target_label}がありません")
+    if not (instruction or "").strip():
+        raise ValueError("修正指示がありません")
+    system = (
+        "あなたはマカレン数秘術の鑑定書を改訂する編集者です。"
+        "利用者の指摘を事実として尊重し、指摘された箇所を具体的に修正してください。"
+        "指摘と無関係な構成・内容・固有名詞は維持し、別人の鑑定書へ作り替えないでください。"
+        "ラッキーアイテム、運命論、断定的な人格評価、恐怖を煽る表現は禁止です。"
+        "出力は改訂後の本文だけにし、Markdown記法、前置き、変更履歴は付けないでください。"
+    )
+    user = f"""【修正対象】
+{target_label}
+
+【利用者の指摘】
+{instruction.strip()}
+
+【入力・計算の文脈】
+{context.strip() or '（追加情報なし）'}
+
+【現在の本文】
+{existing_text.strip()}
+
+現在の本文を土台として、利用者の指摘を反映した完成版全文を出力してください。"""
+    response = _create_chat_completion(get_client(), system, user)
+    revised = response.choices[0].message.content or ""
+    if not revised.strip():
+        raise RuntimeError("修正版の本文が生成されませんでした")
+    return revised.strip()
 
 
 def generate_profile(
