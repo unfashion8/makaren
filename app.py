@@ -64,7 +64,7 @@ def _order_amount(product: str) -> int:
 
 @app.route("/health")
 def health():
-    """Render のヘルスチェック用。起動確認だけしてすぐ 200 を返す。"""
+    """稼働監視用。起動確認だけしてすぐ 200 を返す。"""
     return "", 200
 
 
