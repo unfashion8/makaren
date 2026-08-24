@@ -1,6 +1,8 @@
-# マカレン数秘術 プロファイル作成
+# KOKOROE／ココロエ パーソナル鑑定・絵画販売
 
-生年月日・名前・相談内容から、マカレン数秘術エンジン（v2.0）に基づく **A4約4枚** のプロファイルとパーソナルアートを生成するWebアプリです。利用者は専用ページで指摘・再生成・承認を行い、承認版PDFの受け取りと額装希望の申込ができます。
+生年月日・名前・相談内容を非公開の内部分析へ変換し、**A4約4枚** のパーソナル鑑定とオリジナル抽象画を生成するWebアプリです。利用者は専用ページで指摘・再生成・承認を行い、承認版PDFの受け取りと額装希望の申込ができます。計算値・採点・数式は利用者向け画面とPDFへ表示しません。
+
+KOKOROEは、カバラ数秘術ヤマカレンを参考にしながら、独自の鑑定設計と抽象画制作へ再構成したサービスです。作品は鑑定確認用の高精細画像を生成し、承認後に同一構図の額装用プリントマスターを別途制作します。
 
 ## 料金プラン（商品）
 
@@ -37,9 +39,13 @@ OPENAI_API_KEY=sk-proj-...
 ```
 SUPABASE_URL=https://your-project-ref.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-server-only-key
-MAKAREN_STORAGE_BUCKET=makaren-deliverables
+KOKOROE_STORAGE_BUCKET=makaren-deliverables
 PUBLIC_BASE_URL=https://your-app.example.com
 OPENAI_IMAGE_MODEL=gpt-image-2
+KOKOROE_REVIEW_IMAGE_SIZE=1536x2304
+KOKOROE_REVIEW_IMAGE_QUALITY=high
+KOKOROE_PRINT_IMAGE_SIZE=2304x3456
+KOKOROE_PRINT_IMAGE_QUALITY=high
 ```
 
 Supabaseの2項目が両方未設定の場合は、従来の「生成後すぐPDFメール送信」へ安全にフォールバックします。片方だけ設定された状態は設定ミスとして受付を止めます。
@@ -81,7 +87,8 @@ python app.py
 3. SHA-256ハッシュだけをDBへ保存した専用確認URLをメール送信
 4. 利用者の指摘を受け付け、対象に応じて鑑定文・関係性・作品を再生成
 5. 新しいVersionを作成し、旧版は履歴として保持
-6. 承認後に最終PDFを送付し、必要なら額装希望を保存
+6. 承認後に同一構図の額装用プリントマスターを生成し、最終PDFを送付
+7. 額装画面で高精細マスターを拡大確認し、必要なら額装希望を保存
 
 同じ版への二重修正と二重承認は、状態と版番号を条件にした更新で拒否します。
 
@@ -99,9 +106,11 @@ PDF内で日本語を正しく表示するには、日本語対応フォント�
 
 - `app.py` — Flask ルート・API
 - `profile_generator.py` — OpenAI (ChatGPT) API 呼び出し
-- `prompts.py` — マカレン数秘術エンジン用プロンプト
+- `prompts.py` — KOKOROE鑑定文用プロンプト
 - `pdf_generator.py` — A4 PDF 生成
-- `makaren_workflow.py` — Supabase REST/Storage接続、レビュートークン、GPT Image作品生成
+- `makaren_workflow.py` — Supabase REST/Storage接続、レビュートークン、作品生成
+- `art_direction.py` — 抽象画の構成・物質性・空間設計
+- `ART_DIRECTION.md` — 美術史リサーチと制作基準
 - `engine_config.json` — エンジン仕様（設計思想・禁止出力など）
 - `templates/index.html` — 入力フォーム・結果表示
 - `templates/review.html` — 修正・承認・額装希望の専用ページ

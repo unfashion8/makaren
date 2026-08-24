@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import io
 import json
 import os
 import secrets
@@ -19,6 +20,7 @@ from urllib.parse import quote, urlencode, urljoin
 from urllib.request import Request, urlopen
 
 import profile_generator as pg
+from art_direction import build_studio_prompt
 
 
 WORKFLOW_TABLES = {
@@ -78,7 +80,11 @@ class SupabaseWorkflowStore:
         return cls(
             url=os.environ["SUPABASE_URL"].strip().rstrip("/"),
             service_key=os.environ["SUPABASE_SERVICE_ROLE_KEY"].strip(),
-            bucket=os.getenv("MAKAREN_STORAGE_BUCKET", "makaren-deliverables").strip(),
+            bucket=(
+                os.getenv("KOKOROE_STORAGE_BUCKET", "").strip()
+                or os.getenv("MAKAREN_STORAGE_BUCKET", "").strip()
+                or "makaren-deliverables"
+            ),
             timeout_seconds=float(os.getenv("SUPABASE_TIMEOUT_SECONDS", "30")),
         )
 
@@ -219,14 +225,6 @@ def get_workflow_store() -> SupabaseWorkflowStore:
     return SupabaseWorkflowStore.from_env()
 
 
-def _number_value(numbers: dict, *keys: str) -> str:
-    for key in keys:
-        value = numbers.get(key)
-        if value not in (None, ""):
-            return str(value)
-    return ""
-
-
 def build_art_prompt(
     profile_text: str,
     numbers: dict,
@@ -234,26 +232,13 @@ def build_art_prompt(
     previous_prompt: str | None = None,
     revision_instruction: str | None = None,
 ) -> str:
-    """Create a deterministic, reproducible prompt for personal abstract art."""
-    core = _number_value(numbers, "核数", "core") or "未指定"
-    soul = _number_value(numbers, "魂数", "soul") or "未指定"
-    mission = _number_value(numbers, "使命数", "mission") or "未指定"
-    social = _number_value(numbers, "社会数", "social") or "未指定"
-    excerpt = " ".join((profile_text or "").split())[:3200]
-    prompt = f"""Create an original vertical abstract fine-art composition derived from a Makaren numerology profile.
-
-Core number: {core}. Soul number: {soul}. Mission number: {mission}. Social number: {social}.
-Profile themes: {excerpt}
-
-Translate the psychological structure into color, rhythm, negative space, material texture, and layered geometry. The work should feel contemplative, museum-quality, and suitable for a framed wall print. Use a vertical 2:3 composition with a clear visual center and generous breathing room. No text, letters, numerals, logos, signatures, borders, mockups, frames, people, faces, or recognizable copyrighted characters. Do not imitate a named artist. Make the symbolism subtle rather than literal."""
-    if previous_prompt:
-        prompt += f"\n\nPrevious version prompt for continuity:\n{previous_prompt[:3500]}"
-    if revision_instruction:
-        prompt += (
-            "\n\nCustomer revision instruction. Apply it visibly while preserving the personal "
-            f"identity of the series:\n{revision_instruction[:2000]}"
-        )
-    return prompt
+    """Create a deterministic studio prompt while keeping calculations private."""
+    return build_studio_prompt(
+        profile_text,
+        numbers,
+        previous_prompt=previous_prompt,
+        revision_instruction=revision_instruction,
+    )
 
 
 def generate_artwork(
@@ -271,8 +256,8 @@ def generate_artwork(
         revision_instruction=revision_instruction,
     )
     model = os.getenv("OPENAI_IMAGE_MODEL", "gpt-image-2").strip() or "gpt-image-2"
-    size = os.getenv("OPENAI_IMAGE_SIZE", "1024x1536").strip() or "1024x1536"
-    quality = os.getenv("OPENAI_IMAGE_QUALITY", "medium").strip() or "medium"
+    size = os.getenv("KOKOROE_REVIEW_IMAGE_SIZE", "1536x2304").strip() or "1536x2304"
+    quality = os.getenv("KOKOROE_REVIEW_IMAGE_QUALITY", "high").strip() or "high"
     result = pg.get_client().images.generate(
         model=model,
         prompt=prompt,
@@ -285,3 +270,42 @@ def generate_artwork(
     if not encoded:
         raise RuntimeError("OpenAI Images API returned no image data")
     return base64.b64decode(encoded), prompt, "image/png", model
+
+
+def generate_print_master(approved_art_bytes: bytes) -> tuple[bytes, str, str]:
+    """Enhance an approved composition into a high-resolution print master."""
+    if not approved_art_bytes:
+        raise ValueError("Approved artwork is empty")
+
+    model = os.getenv("OPENAI_IMAGE_MODEL", "gpt-image-2").strip() or "gpt-image-2"
+    size = os.getenv("KOKOROE_PRINT_IMAGE_SIZE", "2304x3456").strip() or "2304x3456"
+    quality = os.getenv("KOKOROE_PRINT_IMAGE_QUALITY", "high").strip() or "high"
+    source = io.BytesIO(approved_art_bytes)
+    source.name = "approved-art.png"
+    prompt = """Create a museum-grade print master from this approved vertical abstract painting.
+
+PRESERVE EXACTLY
+- Preserve the approved composition, crop, 2:3 proportions, palette, tonal structure, negative space, gesture placement, and every distinctive mark.
+- This is a faithful high-resolution refinement of the same artwork, not a reinterpretation and not a new variation.
+
+REFINE ONLY
+- Increase pigment microtexture, shallow relief, edge fidelity, subtle cast shadows within the paint surface, translucent-layer separation, matte-versus-gloss variation, and fine tonal transitions.
+- Make the surface rewarding at close viewing while the composition remains strong from two to three metres away.
+- Maintain printable separation in dark passages and saturated colours. Keep a quiet five-percent crop-safe perimeter without adding a border.
+
+DO NOT ADD
+- No new forms, symbols, objects, text, numerals, signature, logo, frame, mat, wall, room, border, mockup, digital glow, CGI depth, or photographic environment.
+- Do not smooth away physical irregularity. The result must remain a straight-on, full-bleed documentation of the same materially convincing painting."""
+    result = pg.get_client().images.edit(
+        model=model,
+        image=source,
+        prompt=prompt,
+        size=size,
+        quality=quality,
+        output_format="png",
+        response_format="b64_json",
+    )
+    encoded = result.data[0].b64_json if result.data else None
+    if not encoded:
+        raise RuntimeError("OpenAI Images API returned no print-master data")
+    return base64.b64decode(encoded), "image/png", model

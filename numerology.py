@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-マカレン数秘：構成数計算（スプレッドシート用ロジックと同一）
+KOKOROE内部分析：非公開の構成値計算（スプレッドシート用ロジックと同一）
 姓・名はローマ字（A-Z）で与える想定。
 """
 import re
@@ -171,7 +171,7 @@ def _fmt(v) -> str:
     return str(v)
 
 
-# 9年サイクル用: 合計を1桁に還元（11→2, 22→4）。マカレン数秘術のルール。
+# 9年サイクル用: 合計を1桁に還元（11→2, 22→4）。KOKOROE内部ルール。
 def _reduce_to_one_digit_for_cycle(n: int) -> int:
     if n <= 0:
         return 1
@@ -216,7 +216,7 @@ def _birth_i_for_cycle(birth_i) -> int:
     return _reduce_to_one_digit_for_cycle(x)
 
 
-# 各パーソナルイヤーの意味（マカレン数秘術 第6章に準拠）
+# 各パーソナルイヤーの意味（KOKOROE内部ルールに準拠）
 NINE_YEAR_MEANINGS = {
     1: "はじまり",
     2: "バランス",
