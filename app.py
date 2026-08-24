@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-マカレン数秘術 プロファイル生成 Webアプリ
-"""
+"""KOKOROE／ココロエ パーソナル鑑定・絵画販売Webアプリ。"""
 import os
 import re
 import random
@@ -21,6 +19,7 @@ import pdf_generator as pdfgen
 from makaren_workflow import (
     WorkflowStoreError,
     generate_artwork,
+    generate_print_master,
     generate_review_token,
     get_workflow_store,
     hash_review_token,
@@ -35,7 +34,7 @@ logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO").upper(),
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
-logger = logging.getLogger("makaren.mail")
+logger = logging.getLogger("kokoroe.mail")
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 
@@ -104,7 +103,7 @@ def name_guide():
 
 @app.route("/lp")
 def lp():
-    """マカレン数理構造分析のランディングページ。"""
+    """KOKOROEのランディングページ。"""
     return render_template("lp.html")
 
 
@@ -346,9 +345,9 @@ def _email_subject_and_body(product: str, name: str) -> tuple[str, str]:
             "もし「もう少し広く見てみたい」と思われたら、 5名相性鑑定という選択肢もございます。 視野を広げることで、ご自身の立ち位置がより明確になることがあります。\n\n"
             "もしご興味をお持ちの方がいらっしゃれば、 あなた専用の紹介コードをお伝えください。\n"
             "ご友人は10%OFFで鑑定をお受けいただけます。 このコードはご自身でもお使いいただけますので、 次回ご利用の際にもどうぞ。\n"
-            "数秘術という共通の視点があると、会話が少し深まることがあります。\n\n"
+            "KOKOROEという共通の視点があると、会話が少し深まることがあります。\n\n"
             "――\n"
-            "マカレン数秘術\n"
+            "KOKOROE／ココロエ\n"
             "KIMURA KENJI\n"
         )
     elif product == "relationship_5":
@@ -364,7 +363,7 @@ def _email_subject_and_body(product: str, name: str) -> tuple[str, str]:
             "ご友人は10%OFFで鑑定をお受けいただけます。 このコードはご自身の次回鑑定にもお使いいただけます。\n"
             "互いの特性を知った上で関係を築く。 そんな会話のきっかけになれば幸いです。\n\n"
             "――\n"
-            "マカレン数秘術\n"
+            "KOKOROE／ココロエ\n"
             "KIMURA KENJI\n"
         )
     elif product == "relationship_10":
@@ -380,23 +379,23 @@ def _email_subject_and_body(product: str, name: str) -> tuple[str, str]:
             "ご友人は10%OFFで鑑定をお受けいただけます。 このコードはご自身でもお使いいただけます。\n"
             "理解を共有できる人が増えることで、 あなた自身の判断もまた、より確かなものになっていきます。\n\n"
             "――\n"
-            "マカレン数秘術\n"
+            "KOKOROE／ココロエ\n"
             "KIMURA KENJI\n"
         )
     else:
         # profile_only
         subject = "鑑定結果をお届けいたしました"
         body = (
-            "このたびは、マカレン数秘術をご利用いただきありがとうございます。\n"
+            "このたびは、KOKOROE／ココロエをご利用いただきありがとうございます。\n"
             "鑑定結果をお送りいたしました。 どうぞお時間のあるときに、お読みいただければ幸いです。\n\n"
-            "自分自身の数字を知ると、ふとしたときに気づくことがあります。 なぜこのタイミングで、あの人のことが気になったのか。 どうしてこの関係に、特別な何かを感じるのか。\n"
+            "自分自身の内面の傾向を知ると、ふとしたときに気づくことがあります。 なぜこのタイミングで、あの人のことが気になったのか。 どうしてこの関係に、特別な何かを感じるのか。\n"
             "もし今、誰かの顔が浮かんでいるなら、 その人との相性には、何らかの意味があるのかもしれません。\n"
             "相性鑑定はいつでもお受けいただけます。 必要だと感じたときに、またお声がけください。\n\n"
-            "もしマカレン数秘術を誰かにお伝えいただける場合は、 あなた専用の紹介コードをお使いください。\n"
+            "もしKOKOROEを誰かにお伝えいただける場合は、 あなた専用の紹介コードをお使いください。\n"
             "ご友人は10%OFFで鑑定をお受けいただけます。 また、このコードはご自身でもお使いいただけます。\n"
             "同じ体験を共有することで、会話がひとつ深まることもあります。\n\n"
             "――\n"
-            "マカレン数秘術\n"
+            "KOKOROE／ココロエ\n"
             "KIMURA KENJI\n"
         )
     return subject, body
@@ -442,7 +441,7 @@ def _send_review_email(
     *,
     revised: bool = False,
 ) -> tuple[bool, str | None]:
-    subject = "修正版の確認をお願いします — マカレン数秘術" if revised else "鑑定と作品の確認をお願いします — マカレン数秘術"
+    subject = "修正版の確認をお願いします — KOKOROE" if revised else "鑑定と作品の確認をお願いします — KOKOROE"
     opening = "ご指摘を反映した修正版が完成しました。" if revised else "鑑定書とパーソナルアートの初稿が完成しました。"
     body = (
         f"{name} 様\n\n"
@@ -452,7 +451,7 @@ def _send_review_email(
         "修正したい点がある場合は、ページ内から具体的にお知らせください。\n"
         "内容に問題がなければ承認してください。承認後、最終PDFをメールでお送りします。\n\n"
         "このURLはご本人専用です。第三者へ転送しないでください。\n\n"
-        "――\nマカレン数秘術\nKIMURA KENJI\n"
+        "――\nKOKOROE／ココロエ\nKIMURA KENJI\n"
     )
     return _send_plain_email(email_to, subject, body)
 
@@ -473,6 +472,8 @@ def _send_profile_email(
     artwork_bytes: bytes | None = None,
     pdf_bytes_override: bytes | None = None,
 ) -> tuple[bool, str | None]:
+    profile = pg.hide_internal_calculation_values(profile)
+    relationship = pg.hide_internal_calculation_values(relationship)
     if not profile:
         logger.error("[send_email] プロファイル本文が空のため送信できません email=%s product=%s", email_to, product)
         return False, "送信するプロファイル本文がありません"
@@ -490,7 +491,7 @@ def _send_profile_email(
         # 本文（1〜9のセクション）のあと、必ず新しいページから
         # 「10. 周囲の人物との関係性」が始まるようにページ分割マーカーを挿入する。
         full_content += "\n\n[[PAGEBREAK]]\n\n" + relationship
-    title = f"マカレン数秘術 プロファイル — {name}"
+    title = f"KOKOROE パーソナル鑑定書 — {name}"
 
     pdf_bytes = pdf_bytes_override
     if pdf_bytes is None:
@@ -517,7 +518,7 @@ def _send_profile_email(
         pdf_bytes,
         maintype="application",
         subtype="pdf",
-        filename=f"makaren_profile_{safe_name}.pdf",
+        filename=f"kokoroe_reading_{safe_name}.pdf",
     )
 
     try:
@@ -618,7 +619,7 @@ def _generate_analysis(
         numbers_maiden = num.compute_all(maiden_last_name, first_name, y, m, d)
     name_display = f"{last_name} {first_name}"
     consultation_for_llm = consultation or (
-        "本人から具体的な相談内容はないため、あなたが構成数の傾向から見て特に重要だと考えるテーマ"
+        "本人から具体的な相談内容はないため、あなたが内部分析から見て特に重要だと考えるテーマ"
         "（キャリア・人間関係・自己表現・お金・パートナーシップなどの中から1つ）を選び、"
         "そのテーマへのガイダンスも併せて含めてください。"
     )
@@ -680,12 +681,12 @@ def _generate_analysis(
 
 
 def _result_pdf_bytes(result: dict, artwork_bytes: bytes | None) -> bytes:
-    full_content = result["profile"]
+    full_content = pg.hide_internal_calculation_values(result["profile"])
     if result.get("relationship"):
-        full_content += "\n\n[[PAGEBREAK]]\n\n" + result["relationship"]
+        full_content += "\n\n[[PAGEBREAK]]\n\n" + pg.hide_internal_calculation_values(result["relationship"])
     return pdfgen.build_pdf(
         full_content,
-        title=f"マカレン数秘術 プロファイル — {result['name']}",
+        title=f"KOKOROE パーソナル鑑定書 — {result['name']}",
         numbers=result.get("numbers") or {},
         nine_year_cycle=result.get("nine_year_cycle") or [],
         artwork_bytes=artwork_bytes,
@@ -985,11 +986,11 @@ def download_pdf():
     if not profile:
         return jsonify({"ok": False, "error": "プロファイルがありません"}), 400
 
-    full_content = profile
+    full_content = pg.hide_internal_calculation_values(profile)
     if relationship:
-        full_content += "\n\n[[PAGEBREAK]]\n\n" + relationship
+        full_content += "\n\n[[PAGEBREAK]]\n\n" + pg.hide_internal_calculation_values(relationship)
 
-    title = f"マカレン数秘術 プロファイル — {name}"
+    title = f"KOKOROE パーソナル鑑定書 — {name}"
     try:
         pdf_bytes = pdfgen.build_pdf(full_content, title=title)
     except Exception as e:
@@ -999,7 +1000,7 @@ def download_pdf():
         io.BytesIO(pdf_bytes),
         mimetype="application/pdf",
         as_attachment=True,
-        download_name=f"makaren_profile_{name}.pdf",
+        download_name=f"kokoroe_reading_{name}.pdf",
     )
 
 
@@ -1327,11 +1328,55 @@ def _deliver_approved_workflow(workflow_id: str) -> None:
         )
         if not version or not version.get("pdf_storage_path"):
             raise RuntimeError("承認版PDFが見つかりません")
-        pdf_bytes = store.download(version["pdf_storage_path"])
+        artwork_bytes = None
+        if version.get("art_storage_path"):
+            artwork_bytes = store.download(version["art_storage_path"])
+        print_spec = dict(delivery.get("print_spec") or {})
+        print_master_path = f"workflows/{workflow_id}/v{workflow['current_version']}/art-print.png"
+        if artwork_bytes and not print_spec.get("master_path"):
+            print_master_ready = False
+            try:
+                store.download(print_master_path)
+                print_master_ready = True
+            except WorkflowStoreError:
+                try:
+                    print_bytes, print_mime, _print_model = generate_print_master(artwork_bytes)
+                    store.upload(print_master_path, print_bytes, print_mime)
+                    print_master_ready = True
+                except Exception as exc:
+                    logger.exception(
+                        "[workflow] print master generation failed workflow_id=%s",
+                        workflow_id,
+                    )
+                    _record_workflow_event(
+                        store,
+                        workflow_id,
+                        "print_master_failed",
+                        {"error": str(exc)[:500]},
+                    )
+            if print_master_ready:
+                print_spec["master_path"] = print_master_path
+                delivery["print_spec"] = print_spec
+                store.update(
+                    "makaren_deliveries",
+                    {"print_spec": print_spec},
+                    filters={"id": f"eq.{delivery['id']}"},
+                )
+                _record_workflow_event(store, workflow_id, "print_master_ready")
         numbers_full = workflow.get("numbers_full") or {}
         numbers = numbers_full.get("numbers") if isinstance(numbers_full, dict) else {}
         cycle = numbers_full.get("nine_year_cycle") if isinstance(numbers_full, dict) else []
         referred_by = workflow.get("referral_code_used")
+        pdf_bytes = _result_pdf_bytes(
+            {
+                "profile": version["profile_text"],
+                "relationship": version.get("relationship_text"),
+                "name": workflow["customer_name"],
+                "numbers": numbers or {},
+                "nine_year_cycle": cycle or [],
+            },
+            artwork_bytes,
+        )
         sent, error = _send_profile_email(
             profile=version["profile_text"],
             relationship=version.get("relationship_text") or "",
@@ -1407,11 +1452,20 @@ def review_workflow(token: str):
         if _workflow_expired(workflow):
             return "確認ページの有効期限が切れています", 410
         art_url = None
+        print_art_url = None
         pdf_url = None
         if version and version.get("art_storage_path"):
             art_url = store.signed_url(version["art_storage_path"], 600)
-        if version and version.get("pdf_storage_path"):
-            pdf_url = store.signed_url(version["pdf_storage_path"], 600)
+        if version:
+            version = dict(version)
+            version["profile_text"] = pg.hide_internal_calculation_values(version.get("profile_text") or "")
+            version["relationship_text"] = pg.hide_internal_calculation_values(version.get("relationship_text") or "")
+            pdf_url = f"/review/{token}/pdf"
+        print_spec = delivery.get("print_spec") if delivery else None
+        if workflow.get("status") == "delivered" and isinstance(print_spec, dict):
+            print_path = print_spec.get("master_path")
+            if print_path:
+                print_art_url = store.signed_url(print_path, 600)
         response = make_response(
             render_template(
                 "review.html",
@@ -1420,6 +1474,7 @@ def review_workflow(token: str):
                 version=version,
                 delivery=delivery,
                 art_url=art_url,
+                print_art_url=print_art_url,
                 pdf_url=pdf_url,
             )
         )
@@ -1436,6 +1491,44 @@ def review_workflow(token: str):
     except WorkflowStoreError:
         logger.exception("[workflow] review page failed")
         return "確認ページを読み込めませんでした", 503
+
+
+@app.route("/review/<token>/pdf", methods=["GET"])
+def review_workflow_pdf(token: str):
+    """既存版も含め、内部値を除去したPDFを都度生成して返す。"""
+    if not workflow_enabled():
+        return "Review workflow is not configured", 503
+    try:
+        store, workflow, version, _delivery = _load_review_state(token)
+        if not workflow or not version:
+            return "確認ページが見つかりません", 404
+        if _workflow_expired(workflow):
+            return "確認ページの有効期限が切れています", 410
+        artwork_bytes = None
+        if version.get("art_storage_path"):
+            artwork_bytes = store.download(version["art_storage_path"])
+        pdf_bytes = _result_pdf_bytes(
+            {
+                "profile": version.get("profile_text") or "",
+                "relationship": version.get("relationship_text"),
+                "name": workflow.get("customer_name") or "",
+                "numbers": {},
+                "nine_year_cycle": [],
+            },
+            artwork_bytes,
+        )
+        response = send_file(
+            io.BytesIO(pdf_bytes),
+            mimetype="application/pdf",
+            as_attachment=False,
+            download_name="kokoroe_reading.pdf",
+        )
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        return response
+    except WorkflowStoreError:
+        logger.exception("[workflow] safe PDF preview failed")
+        return "PDFを読み込めませんでした", 503
 
 
 @app.route("/api/review/<token>/feedback", methods=["POST"])
@@ -1620,11 +1713,14 @@ def request_framing(token: str):
             return jsonify({"ok": False, "error": "確認対象が見つかりません"}), 404
         if workflow.get("status") != "delivered":
             return jsonify({"ok": False, "error": "最終PDFの納品後にお申し込みください"}), 409
+        existing_print_spec = delivery.get("print_spec") if delivery else None
         print_spec = {
             "size": _normalize_text(data.get("size"))[:100],
             "paper": _normalize_text(data.get("paper"))[:100],
             "notes": _normalize_text(data.get("print_notes"))[:1000],
         }
+        if isinstance(existing_print_spec, dict) and existing_print_spec.get("master_path"):
+            print_spec["master_path"] = existing_print_spec["master_path"]
         frame_spec = {
             "style": _normalize_text(data.get("frame_style"))[:100],
             "color": _normalize_text(data.get("frame_color"))[:100],
