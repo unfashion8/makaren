@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="robots" content="noindex,nofollow,noarchive" />
-  <title>鑑定と作品の確認 — マカレン数秘術</title>
+  <title>鑑定と作品の確認 — KOKOROE／ココロエ</title>
   <style>
     :root {
       --bg: #070708;
@@ -25,6 +25,9 @@
     .muted { color: var(--muted); }
     .panel { background: rgba(17,18,23,.94); border: 1px solid var(--border); border-radius: 16px; padding: clamp(1.2rem, 4vw, 2rem); margin-top: 1.5rem; }
     .art { width: 100%; max-height: 72vh; object-fit: contain; display: block; background: #050506; border-radius: 10px; }
+    .art-note { margin: .8rem 0 0; color: var(--muted); font-size: .88rem; }
+    .print-preview { display: block; margin: 1rem auto 1.4rem; max-width: 820px; }
+    .print-preview img { width: 100%; height: auto; display: block; background: #050506; border-radius: 10px; box-shadow: 0 26px 60px rgba(0,0,0,.42); cursor: zoom-in; }
     .report { white-space: pre-wrap; max-height: 62vh; overflow: auto; padding-right: .5rem; }
     .status { padding: .9rem 1rem; border-radius: 8px; background: rgba(201,162,74,.12); border: 1px solid rgba(201,162,74,.35); }
     .message { margin-top: 1rem; min-height: 1.5rem; }
@@ -46,6 +49,7 @@
   <main class="wrap">
     <h1>鑑定と作品の確認</h1>
     <p class="muted">{{ workflow.customer_name }} 様専用・Version {{ workflow.current_version }}</p>
+    <p class="muted">KOKOROEは、カバラ数秘術ヤマカレンを参考にしながら、独自の鑑定設計と抽象画制作へ再構成しています。内部の計算値・採点値は表示していません。</p>
 
     {% if workflow.status in ['revision_requested', 'regenerating'] %}
       <div class="status">ご指摘を反映して再生成しています。完成後にメールでお知らせします。</div>
@@ -60,6 +64,7 @@
       <section class="panel">
         <h2>パーソナルアート</h2>
         <img class="art" src="{{ art_url }}" alt="生成されたパーソナルアート" />
+        <p class="art-note">鑑定確認用・高精細作品。細部を保ちながら、承認後は同じ構図を額装用プリントマスターへ仕上げます。</p>
       </section>
       {% endif %}
 
@@ -103,6 +108,13 @@
     {% if workflow.status == 'delivered' %}
       <section class="panel">
         <h2>額装を希望する</h2>
+        {% if print_art_url %}
+          <p class="muted">承認した構図を変えず、絵肌・階調・輪郭を印刷向けに高精細化した額装用プリントマスターです。</p>
+          <a class="print-preview" href="{{ print_art_url }}" target="_blank" rel="noreferrer" aria-label="額装用プリントマスターを原寸で開く">
+            <img src="{{ print_art_url }}" alt="額装用プリントマスター" />
+          </a>
+          <p class="art-note">画像をクリックすると大きく開き、抽象画の細部を確認できます。この画像は専用の期限付きURLで表示しています。</p>
+        {% endif %}
         <p class="muted">希望仕様を保存し、個別見積へ引き継ぎます。確定注文や決済はまだ行われません。</p>
         <form id="framingForm">
           <div class="grid">
